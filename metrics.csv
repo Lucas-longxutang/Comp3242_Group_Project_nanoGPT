@@ -5,3 +5,15 @@ baseline,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,layernorm,standard,l
 ablation_pos-learned_norm-layernorm_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,layernorm,standard,learned,4.287789821624756,4.282794952392578,705.65
 ablation_pos-learned_norm-none_heads-6,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,none,standard,learned,4.174160003662109,4.173848628997803,822.0
 ablation_pos-learned_norm-none_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,none,standard,learned,4.174160003662109,4.173848628997803,730.14
+baseline,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,layernorm,standard,learned,4.287301540374756,4.282231330871582,838.47
+ablation_pos-learned_norm-layernorm_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,layernorm,standard,learned,4.287789821624756,4.282794952392578,716.5
+ablation_pos-learned_norm-none_heads-6,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,none,standard,learned,4.174160003662109,4.173848628997803,825.23
+ablation_pos-learned_norm-none_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,none,standard,learned,4.174160003662109,4.173848628997803,711.0
+ablation_pos-rope_norm-layernorm_heads-6,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,layernorm,standard,rope,4.193721771240234,4.200528144836426,852.14
+ablation_pos-rope_norm-layernorm_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,layernorm,standard,rope,4.196293354034424,4.203027725219727,723.47
+ablation_pos-rope_norm-none_heads-6,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,none,standard,rope,4.172705173492432,4.17264461517334,830.91
+ablation_pos-rope_norm-none_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,none,standard,rope,4.172705173492432,4.17264461517334,709.34
+ablation_pos-alibi_norm-layernorm_heads-6,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,layernorm,standard,alibi,4.195531368255615,4.20461368560791,855.39
+ablation_pos-alibi_norm-layernorm_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,layernorm,standard,alibi,4.194284439086914,4.200945854187012,702.52
+ablation_pos-alibi_norm-none_heads-6,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,none,standard,alibi,4.172703742980957,4.17264461517334,857.62
+ablation_pos-alibi_norm-none_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,none,standard,alibi,4.172705173492432,4.17264461517334,629.98
