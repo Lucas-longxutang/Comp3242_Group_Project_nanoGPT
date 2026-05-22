@@ -1,3 +1,7 @@
 run_name,seed,device,batch_size,block_size,max_iters,eval_interval,eval_iters,learning_rate,vocab_size,log_interval,n_layer,n_head,n_embd,dropout,norm_type,linear_type,use_pos_encoding,final_train_loss,final_val_loss,training_time_sec
 Original Run,1337,cuda,64,256,50,250,200,0.001,65,10,6,6,384,0.2,layernorm,standard,True,4.325824737548828,4.326872825622559,102.25
 Original Run,1337,cuda,64,256,50,250,200,0.001,65,10,6,6,384,0.2,layernorm,standard,True,4.287301540374756,4.282231330871582,64.76
+baseline,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,layernorm,standard,learned,4.287301540374756,4.282231330871582,846.86
+ablation_pos-learned_norm-layernorm_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,layernorm,standard,learned,4.287789821624756,4.282794952392578,705.65
+ablation_pos-learned_norm-none_heads-6,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,none,standard,learned,4.174160003662109,4.173848628997803,822.0
+ablation_pos-learned_norm-none_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,none,standard,learned,4.174160003662109,4.173848628997803,730.14
