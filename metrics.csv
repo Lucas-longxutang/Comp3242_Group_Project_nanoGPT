@@ -1,19 +1,15 @@
-run_name,seed,device,batch_size,block_size,max_iters,eval_interval,eval_iters,learning_rate,vocab_size,log_interval,n_layer,n_head,n_embd,dropout,norm_type,linear_type,use_pos_encoding,final_train_loss,final_val_loss,training_time_sec
-Original Run,1337,cuda,64,256,50,250,200,0.001,65,10,6,6,384,0.2,layernorm,standard,True,4.325824737548828,4.326872825622559,102.25
-Original Run,1337,cuda,64,256,50,250,200,0.001,65,10,6,6,384,0.2,layernorm,standard,True,4.287301540374756,4.282231330871582,64.76
-baseline,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,layernorm,standard,learned,4.287301540374756,4.282231330871582,846.86
-ablation_pos-learned_norm-layernorm_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,layernorm,standard,learned,4.287789821624756,4.282794952392578,705.65
-ablation_pos-learned_norm-none_heads-6,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,none,standard,learned,4.174160003662109,4.173848628997803,822.0
-ablation_pos-learned_norm-none_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,none,standard,learned,4.174160003662109,4.173848628997803,730.14
-baseline,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,layernorm,standard,learned,4.287301540374756,4.282231330871582,838.47
-ablation_pos-learned_norm-layernorm_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,layernorm,standard,learned,4.287789821624756,4.282794952392578,716.5
-ablation_pos-learned_norm-none_heads-6,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,none,standard,learned,4.174160003662109,4.173848628997803,825.23
-ablation_pos-learned_norm-none_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,none,standard,learned,4.174160003662109,4.173848628997803,711.0
-ablation_pos-rope_norm-layernorm_heads-6,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,layernorm,standard,rope,4.193721771240234,4.200528144836426,852.14
-ablation_pos-rope_norm-layernorm_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,layernorm,standard,rope,4.196293354034424,4.203027725219727,723.47
-ablation_pos-rope_norm-none_heads-6,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,none,standard,rope,4.172705173492432,4.17264461517334,830.91
-ablation_pos-rope_norm-none_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,none,standard,rope,4.172705173492432,4.17264461517334,709.34
-ablation_pos-alibi_norm-layernorm_heads-6,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,layernorm,standard,alibi,4.195531368255615,4.20461368560791,855.39
-ablation_pos-alibi_norm-layernorm_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,layernorm,standard,alibi,4.194284439086914,4.200945854187012,702.52
-ablation_pos-alibi_norm-none_heads-6,1337,cpu,64,256,50,250,200,0.001,65,10,6,6,384,0.2,none,standard,alibi,4.172703742980957,4.17264461517334,857.62
-ablation_pos-alibi_norm-none_heads-1,1337,cpu,64,256,50,250,200,0.001,65,10,6,1,384,0.2,none,standard,alibi,4.172705173492432,4.17264461517334,629.98
+run_name,seed,device,wandb_log,wandb_project,batch_size,block_size,max_iters,eval_interval,eval_iters,learning_rate,min_lr,warmup_iters,lr_decay_iters,weight_decay,grad_clip,vocab_size,bias,log_interval,n_layer,n_head,n_embd,dropout,norm_type,norm_placement,linear_type,pos_encoding,residual_type,activation_type,final_train_loss,final_val_loss,training_time_sec
+baseline,1337,cuda,True,nanogpt-ablations,64,256,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,6,384,0.2,layernorm,pre,standard,learned,standard,gelu,2.514491081237793,2.514069080352783,6.9
+A1_no_pos_encoding,1337,cuda,True,nanogpt-ablations,64,256,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,6,384,0.2,layernorm,pre,standard,none,standard,gelu,2.491083860397339,2.4973807334899902,6.81
+A2_rope,1337,cuda,True,nanogpt-ablations,64,256,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,6,384,0.2,layernorm,pre,standard,rope,standard,gelu,2.3704192638397217,2.370809555053711,7.84
+A3_alibi,1337,cuda,True,nanogpt-ablations,64,256,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,6,384,0.2,layernorm,pre,standard,alibi,standard,gelu,2.278343439102173,2.2904129028320312,11.18
+B1_rmsnorm,1337,cuda,True,nanogpt-ablations,64,256,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,6,384,0.2,rmsnorm,pre,standard,learned,standard,gelu,2.513176441192627,2.5128583908081055,8.98
+B3_post_ln,1337,cuda,True,nanogpt-ablations,64,256,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,6,384,0.2,layernorm,post,standard,learned,standard,gelu,3.3204314708709717,3.354835033416748,7.56
+C1_1_head,1337,cuda,True,nanogpt-ablations,64,256,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,1,384,0.2,layernorm,pre,standard,learned,standard,gelu,2.516158103942871,2.515188694000244,8.22
+C1_12_heads,1337,cuda,True,nanogpt-ablations,64,256,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,12,384,0.2,layernorm,pre,standard,learned,standard,gelu,2.51041316986084,2.510918378829956,8.87
+D1_relu,1337,cuda,True,nanogpt-ablations,64,256,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,6,384,0.2,layernorm,pre,standard,learned,standard,relu,2.520906925201416,2.518672466278076,7.71
+D2_swiglu,1337,cuda,True,nanogpt-ablations,64,256,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,6,384,0.2,layernorm,pre,standard,learned,standard,swiglu,2.502920627593994,2.500469923019409,8.77
+E2_scaled_residual,1337,cuda,True,nanogpt-ablations,64,256,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,6,384,0.2,layernorm,pre,standard,learned,scaled,gelu,2.5028371810913086,2.503857135772705,8.12
+E3_no_residuals,1337,cuda,True,nanogpt-ablations,64,256,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,6,384,0.2,layernorm,pre,standard,learned,none,gelu,3.321807861328125,3.359163761138916,7.75
+F1_context_128,1337,cuda,True,nanogpt-ablations,64,128,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,6,384,0.2,layernorm,pre,standard,learned,standard,gelu,2.5128977298736572,2.5045406818389893,4.2
+G1_ternary_weights,1337,cuda,True,nanogpt-ablations,64,256,50,25,10,0.001,0.0001,10,50,0.1,1.0,65,False,10,6,6,384,0.2,layernorm,pre,ternary,learned,standard,gelu,2.5072174072265625,2.5106112957000732,8.7
