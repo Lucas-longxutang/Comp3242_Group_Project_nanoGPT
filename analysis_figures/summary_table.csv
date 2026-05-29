@@ -1,17 +1,17 @@
 Group,Configuration,Val Loss,Δ from baseline,Training Time (s),Params (M)
-A: Positional Encoding,A1 no pos encoding,1.5706,-0.129,975.2,10.65
-A: Positional Encoding,A2 rope,1.7465,0.0468,1100.0,10.65
-A: Positional Encoding,A3 alibi,1.8137,0.1141,1673.6,10.65
-A: Positional Encoding,baseline,1.6996,0.0,931.6,10.75
-B: Normalization,B1 rmsnorm,1.6899,-0.0097,1166.8,10.75
-B: Normalization,B2 post ln,1.5709,-0.1288,941.4,10.75
-C: Attention Heads,C1 1 head,1.5233,-0.1764,997.2,10.75
-C: Attention Heads,C2 8 heads,1.7094,0.0097,967.2,10.75
-C: Attention Heads,C3 12 heads,1.7162,0.0166,975.4,10.75
-D: Activation,D1 relu,1.6079,-0.0917,896.4,10.75
-D: Activation,D2 swiglu,1.8798,0.1802,1018.4,10.75
-E: Residual,E1 scaled residual,1.69,-0.0097,950.6,10.75
-E: Residual,E2 no residuals,3.358,1.6583,801.3,10.75
-F: Context Length,F1 context 128,1.5036,-0.196,407.0,10.7
-F: Context Length,F2 context 512,2.0124,0.3128,1841.7,10.84
-G: Quantization,G1 ternary weights,1.4747,-0.2249,954.3,10.75
+A: Positional Encoding,A1 no pos encoding,1.5687,-0.1293,932.2,10.65
+A: Positional Encoding,A2 rope,1.7432,0.0453,1060.8,10.65
+A: Positional Encoding,A3 alibi,1.8131,0.1152,1617.7,10.65
+A: Positional Encoding,baseline,1.698,0.0,893.0,10.75
+B: Normalization,B1 rmsnorm,1.6913,-0.0066,1121.2,10.75
+B: Normalization,B2 post ln,1.5725,-0.1254,899.3,10.75
+C: Attention Heads,C1 1 head,1.5227,-0.1752,958.7,10.75
+C: Attention Heads,C2 8 heads,1.7102,0.0123,932.8,10.75
+C: Attention Heads,C3 12 heads,1.7182,0.0202,938.0,10.75
+D: Activation,D1 relu,1.6093,-0.0886,867.0,10.75
+D: Activation,D2 swiglu,1.8808,0.1829,981.8,10.75
+E: Residual,E1 scaled residual,1.6884,-0.0096,914.8,10.75
+E: Residual,E2 no residuals,3.3578,1.6599,743.8,10.75
+F: Context Length,F1 context 128,1.4994,-0.1986,374.8,10.7
+F: Context Length,F2 context 512,2.0134,0.3154,1706.2,10.84
+G: Quantization,G1 ternary weights,1.4739,-0.224,863.2,10.75
