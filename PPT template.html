@@ -1,0 +1,2643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architectural Ablation & Quantization</title>
+    <style>
+        /* =========================================
+           GLOBAL ENGINE STYLES (Do Not Edit)
+           ========================================= */
+        :root {
+            --bg-color: #090b10;
+            --panel-color: #161b22;
+            --text-main: #f0f6fc;
+            --text-muted: #8b949e;
+            
+            --neon-blue: #00f3ff;
+            --neon-purple: #b300ff;
+            --neon-green: #00ff66;
+            --neon-red: #ff3366;
+            --neon-yellow: #ffcc00;
+
+            /* New Expanded Neon Colors */
+            --neon-orange: #ff6600;
+            --neon-pink: #ff00ff;
+            --neon-amber: #ff9900;
+            --neon-electric:#3300ff;
+            --neon-lime: #aaff00;
+
+            --stroke: #30363d;
+            --anim-speed: 0.6s;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-color); color: var(--text-main); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
+
+        /* The background split (Constant) */
+        #global-bg-left { position: absolute; left: 0; top: 0; width: 60%; height: 100%; background: radial-gradient(circle at center, #11151d 0%, var(--bg-color) 100%); border-right: 1px solid var(--stroke); z-index: -1; }
+
+        /* Section Container Layout */
+        .section-block { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; transition: opacity var(--anim-speed) ease; }
+        .section-block.active { opacity: 1; pointer-events: auto; }
+
+        .visual-pane { position: absolute; left: 0; top: 0; width: 60%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; }
+        
+        .slide-pane { position: absolute; right: 0; top: 0; width: 40%; height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 4rem; transform: translateY(30px); transition: transform var(--anim-speed) ease; }
+        .section-block.active .slide-pane { transform: translateY(0); }
+
+        /* Typography */
+        h1 { font-size: 2.2rem; font-weight: 300; margin-bottom: 1rem; line-height: 1.2; }
+        h2 { font-size: 1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 0.5rem; color: var(--neon-blue); }
+        p { font-size: 1.1rem; line-height: 1.6; color: var(--text-muted); margin-bottom: 1.5rem; }
+
+        /* Sub-Step Animation Engine */
+        .step-element { opacity: 0.1; filter: grayscale(100%); transform: scale(0.95); transition: all var(--anim-speed) ease; }
+        .step-element.active-step { opacity: 1; filter: none; transform: scale(1); }
+
+        p.step-element { opacity: 0; transform: translateY(10px); display: none; }
+        p.step-element.active-step { opacity: 1; transform: translateY(0); display: block; }
+
+        #progress-bar { position: absolute; bottom: 0; left: 0; height: 4px; background: var(--neon-blue); transition: width 0.3s linear; z-index: 100; }
+
+        /* Generic Visual Placeholder */
+        .placeholder-box { padding: 30px; border: 2px dashed var(--stroke); background: rgba(22, 27, 34, 0.5); border-radius: 8px; font-family: monospace; font-size: 1.2rem; color: var(--text-muted); text-align: center; width: 60%; transition: all 0.5s ease; }
+    </style>
+</head>
+<body>
+
+    <!-- Background Layer -->
+    <div id="global-bg-left"></div>
+    <div id="progress-bar" style="width: 0%;"></div>
+
+    <div id="presentation-root">
+
+        <!-- ======================================================= -->
+        <!-- TITLE SLIDE                                             -->
+        <!-- ======================================================= -->
+        <section class="section-block active" data-max-steps="0">
+            <style>
+                /* --- Scoped Animations & Styles for Title Graphic --- */
+                @keyframes tSpin { 100% { transform: rotate(360deg); } }
+                @keyframes tSpinRev { 100% { transform: rotate(-360deg); } }
+                @keyframes tPulse { 
+                    0%, 100% { opacity: 0.6; filter: drop-shadow(0 0 10px var(--neon-blue)); } 
+                    50% { opacity: 1; filter: drop-shadow(0 0 25px var(--neon-cyan)); } 
+                }
+                
+                /* Mathematically perfect loop: array 12+12=24, offset -24 */
+                @keyframes tSmoothFlow { 100% { stroke-dashoffset: -24; } }
+                /* Faster flow: array 8+8=16, offset -16 */
+                @keyframes tFastFlow { 100% { stroke-dashoffset: -16; } }
+
+                .t-blueprint-grid { stroke: var(--stroke); stroke-width: 0.5; opacity: 0.4; }
+                
+                .t-ring-outer { transform-origin: 400px 400px; animation: tSpin 40s linear infinite; }
+                .t-ring-inner { transform-origin: 400px 400px; animation: tSpinRev 30s linear infinite; }
+                .t-core-poly { transform-origin: 400px 400px; animation: tSpin 60s linear infinite; }
+
+                .t-data-line { fill: none; stroke-width: 2; stroke-dasharray: 12, 12; animation: tSmoothFlow 1s linear infinite; }
+                .t-data-line-fast { fill: none; stroke-width: 2; stroke-dasharray: 8, 8; animation: tFastFlow 0.6s linear infinite; }
+
+                .t-math-text { fill: var(--text-muted); font-family: monospace; font-size: 13px; opacity: 0.7; }
+                .t-highlight-text { fill: var(--neon-cyan); font-family: monospace; font-size: 14px; font-weight: bold; letter-spacing: 2px;}
+            </style>
+
+            <div class="visual-pane">
+                <svg viewBox="0 0 800 800" style="width: 100%; height: 100%; max-height: 90vh;">
+                    
+                    <defs>
+                        <!-- Blueprint Grid Pattern -->
+                        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                            <path d="M 40 0 L 0 0 0 40" fill="none" class="t-blueprint-grid" />
+                        </pattern>
+                        <linearGradient id="core-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="var(--neon-blue)" stop-opacity="0.1"/>
+                            <stop offset="100%" stop-color="var(--neon-purple)" stop-opacity="0.2"/>
+                        </linearGradient>
+                    </defs>
+
+                    <!-- Background Grid -->
+                    <rect width="800" height="800" fill="url(#grid)" />
+
+                    <!-- Floating Transformer Math (Background) -->
+                    <text x="50" y="100" class="t-math-text">Attention(Q, K, V) = softmax(QK^T / √d_k)V</text>
+                    <text x="500" y="150" class="t-math-text">LayerNorm(x + Sublayer(x))</text>
+                    <text x="80" y="720" class="t-math-text">FFN(x) = max(0, xW_1 + b_1)W_2 + b_2</text>
+                    <text x="550" y="680" class="t-math-text">(B, T, C) → (B, T, 4C) → (B, T, C)</text>
+
+                    <!-- Inbound / Outbound Data Streams -->
+                    <path d="M 0 400 L 220 400" class="t-data-line" style="stroke: var(--neon-blue);" />
+                    <path d="M 580 400 L 800 400" class="t-data-line" style="stroke: var(--neon-purple);" />
+                    <path d="M 400 0 L 400 220" class="t-data-line" style="stroke: var(--neon-cyan);" />
+                    <path d="M 400 580 L 400 800" class="t-data-line" style="stroke: var(--neon-pink);" />
+
+                    <!-- Diagonal High-Speed Connections -->
+                    <path d="M 150 150 L 280 280" class="t-data-line-fast" style="stroke: var(--neon-orange);" />
+                    <path d="M 650 650 L 520 520" class="t-data-line-fast" style="stroke: var(--neon-orange);" />
+                    <path d="M 150 650 L 280 520" class="t-data-line-fast" style="stroke: var(--neon-yellow);" />
+                    <path d="M 650 150 L 520 280" class="t-data-line-fast" style="stroke: var(--neon-yellow);" />
+
+                    <!-- Outer Architecture Ring -->
+                    <g class="t-ring-outer">
+                        <circle cx="400" cy="400" r="220" fill="none" stroke="var(--stroke)" stroke-width="2" stroke-dasharray="10 5" />
+                        <circle cx="400" cy="180" r="8" fill="var(--panel-color)" stroke="var(--neon-cyan)" stroke-width="2"/>
+                        <circle cx="400" cy="620" r="8" fill="var(--panel-color)" stroke="var(--neon-pink)" stroke-width="2"/>
+                        <circle cx="180" cy="400" r="8" fill="var(--panel-color)" stroke="var(--neon-blue)" stroke-width="2"/>
+                        <circle cx="620" cy="400" r="8" fill="var(--panel-color)" stroke="var(--neon-purple)" stroke-width="2"/>
+                    </g>
+
+                    <!-- Middle Attention Ring -->
+                    <g class="t-ring-inner">
+                        <circle cx="400" cy="400" r="160" fill="none" stroke="var(--neon-purple)" stroke-width="1.5" stroke-dasharray="30 10 5 10" opacity="0.8" />
+                        <!-- Attention Heads represented by squares on the ring -->
+                        <rect x="230" y="390" width="20" height="20" fill="rgba(179, 0, 255, 0.2)" stroke="var(--neon-purple)" transform="rotate(45, 240, 400)" />
+                        <rect x="550" y="390" width="20" height="20" fill="rgba(179, 0, 255, 0.2)" stroke="var(--neon-purple)" transform="rotate(45, 560, 400)" />
+                        <rect x="390" y="230" width="20" height="20" fill="rgba(179, 0, 255, 0.2)" stroke="var(--neon-purple)" transform="rotate(45, 400, 240)" />
+                        <rect x="390" y="550" width="20" height="20" fill="rgba(179, 0, 255, 0.2)" stroke="var(--neon-purple)" transform="rotate(45, 400, 560)" />
+                    </g>
+
+                    <!-- Central Core Complex -->
+                    <g style="animation: tPulse 4s infinite;">
+                        <!-- Geometric Center representing dense network -->
+                        <polygon points="400,280 504,340 504,460 400,520 296,460 296,340" fill="url(#core-glow)" stroke="var(--neon-blue)" stroke-width="2" class="t-core-poly" />
+                        <polygon points="400,320 469,360 469,440 400,480 331,440 331,360" fill="none" stroke="var(--neon-cyan)" stroke-width="1" stroke-dasharray="4 4" class="t-ring-inner" />
+                        
+                        <!-- Core Text -->
+                        <text x="400" y="395" class="t-highlight-text" text-anchor="middle">TRANSFORMER</text>
+                        <text x="400" y="420" fill="var(--text-main)" font-family="monospace" font-size="12" text-anchor="middle" letter-spacing="4" opacity="0.8">ARCHITECTURE</text>
+                    </g>
+
+                </svg>
+            </div>
+            
+            <div class="slide-pane">
+                <h2>Team 22</h2>
+                <h1>Architectural Ablation & Quantization in Small Transformers</h1>
+                <p style="margin-top: 1rcap; color: var(--neon-cyan); font-family: monospace; font-size: 0.9rem;">
+                    Madhav, Ricky, Tom, Yunkai
+                </p>
+            </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- SECTION 1: THE QUESTION                                 -->
+        <!-- ======================================================= -->
+        <section class="section-block" data-max-steps="1" id="sec-1">
+            <style>
+                /* --- Scoped Animations & Styles for Section 1 --- */
+                #sec-1 .s1-flow { stroke: var(--neon-blue); stroke-width: 2; fill: none; stroke-dasharray: 8, 12; animation: s1FlowAnim 1.5s linear infinite; }
+                #sec-1 .s1-flow.purple { stroke: var(--neon-purple); animation-duration: 2s; }
+                #sec-1 .s1-flow.green { stroke-dasharray: 10, 10; animation: s1FlowAnim 1.2s linear infinite; }
+                
+                @keyframes s1FlowAnim { to { stroke-dashoffset: -40; } }
+                
+                /* Complex Model Rotating Layers */
+                #sec-1 .s1-layer { fill: rgba(88, 166, 255, 0.03); stroke: var(--neon-blue); stroke-width: 2; transform-origin: 400px 400px; }
+                #sec-1 .s1-layer.l1 { animation: s1Spin 20s linear infinite; }
+                #sec-1 .s1-layer.l2 { stroke: var(--neon-purple); animation: s1SpinReverse 25s linear infinite; }
+                #sec-1 .s1-layer.l3 { stroke: var(--neon-yellow); animation: s1Spin 30s linear infinite; }
+                
+                @keyframes s1Spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                @keyframes s1SpinReverse { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+
+                /* Node Styling */
+                #sec-1 .s1-node { fill: var(--panel-color); stroke: var(--neon-blue); stroke-width: 3; }
+                #sec-1 .s1-node.core { stroke: var(--text-main); fill: var(--bg-color); }
+                
+                /* --- The Collapse Transition Logic --- */
+                /* Complex model scaled to 0.9 to prevent clipping in the 800x800 viewBox */
+                #sec-1 .complex-model { transition: all 1.2s cubic-bezier(0.25, 1, 0.5, 1); transform-origin: 400px 400px; transform: scale(0.9); }
+                #sec-1 .small-model { transition: all 1.2s cubic-bezier(0.25, 1, 0.5, 1); transform-origin: 400px 400px; opacity: 0; transform: scale(0.3); }
+
+                /* When step 1 triggers, hide complex, show small */
+                #sec-1 .step-trigger.active-step ~ .visual-pane .complex-model { opacity: 0; transform: scale(2.5) rotate(45deg); filter: blur(15px); }
+                #sec-1 .step-trigger.active-step ~ .visual-pane .small-model { opacity: 1; transform: scale(1); }
+            </style>
+            
+            <!-- Hidden state trigger for CSS -->
+            <div class="step-element step-trigger" data-step="1" style="display:none;"></div>
+
+            <!-- Left Pane: Visuals -->
+            <div class="visual-pane">
+                <svg viewBox="0 0 800 800" style="width: 100%; height: 100%; max-height: 85vh;">
+                    
+                    <!-- 1. THE COMPLEX LLM (Visible at start) -->
+                    <g class="complex-model">
+                        <!-- Flowing Background Data -->
+                        <path d="M 100 700 C 100 400, 400 600, 400 400" class="s1-flow" />
+                        <path d="M 250 750 C 250 500, 400 500, 400 400" class="s1-flow purple" />
+                        <path d="M 400 800 L 400 400" class="s1-flow" />
+                        <path d="M 550 750 C 550 500, 400 500, 400 400" class="s1-flow purple" />
+                        <path d="M 700 700 C 700 400, 400 600, 400 400" class="s1-flow" />
+
+                        <path d="M 400 400 C 400 200, 100 300, 100 100" class="s1-flow purple" />
+                        <path d="M 400 400 C 400 200, 250 300, 250 50" class="s1-flow" />
+                        <path d="M 400 400 L 400 0" class="s1-flow purple" />
+                        <path d="M 400 400 C 400 200, 550 300, 550 50" class="s1-flow" />
+                        <path d="M 400 400 C 400 200, 700 300, 700 100" class="s1-flow purple" />
+
+                        <!-- Overlapping Attention/Transformer Blocks -->
+                        <rect x="250" y="250" width="300" height="300" rx="20" class="s1-layer l1" />
+                        <rect x="250" y="250" width="300" height="300" rx="20" class="s1-layer l2" />
+                        <rect x="250" y="250" width="300" height="300" rx="20" class="s1-layer l3" />
+                        
+                        <!-- Peripheral Nodes -->
+                        <circle cx="100" cy="700" r="20" class="s1-node" />
+                        <circle cx="250" cy="750" r="15" class="s1-node" style="stroke: var(--neon-purple);" />
+                        <circle cx="400" cy="800" r="25" class="s1-node" />
+                        <circle cx="550" cy="750" r="15" class="s1-node" style="stroke: var(--neon-purple);" />
+                        <circle cx="700" cy="700" r="20" class="s1-node" />
+
+                        <circle cx="100" cy="100" r="20" class="s1-node" style="stroke: var(--neon-purple);" />
+                        <circle cx="250" cy="50" r="15" class="s1-node" />
+                        <circle cx="400" cy="0" r="25" class="s1-node" style="stroke: var(--neon-purple);" />
+                        <circle cx="550" cy="50" r="15" class="s1-node" />
+                        <circle cx="700" cy="100" r="20" class="s1-node" style="stroke: var(--neon-purple);" />
+
+                        <!-- Core Central Nodes -->
+                        <circle cx="400" cy="400" r="50" class="s1-node core" />
+                        <circle cx="400" cy="400" r="70" class="s1-flow purple" style="animation-duration: 4s;" />
+                        <circle cx="300" cy="300" r="15" class="s1-node" />
+                        <circle cx="500" cy="300" r="15" class="s1-node" />
+                        <circle cx="300" cy="500" r="15" class="s1-node" />
+                        <circle cx="500" cy="500" r="15" class="s1-node" />
+                    </g>
+
+                    <!-- 2. THE SMALL NANOGPT (Fades in on Step 1, Centered at Y=400) -->
+                    <g class="small-model">
+                        <path d="M 330 490 L 400 420" class="s1-flow green" style="stroke: var(--neon-green);" />
+                        <path d="M 470 490 L 400 420" class="s1-flow green" style="stroke: var(--neon-green);" />
+                        <path d="M 400 350 L 400 300" class="s1-flow green" style="stroke: var(--neon-green);" />
+                        
+                        <rect x="290" y="490" width="80" height="15" rx="4" class="s1-node" style="stroke: var(--neon-green);" />
+                        <rect x="430" y="490" width="80" height="15" rx="4" class="s1-node" style="stroke: var(--neon-green);" />
+                        <rect x="360" y="285" width="80" height="15" rx="4" class="s1-node" style="stroke: var(--neon-green);" />
+                        
+                        <rect x="350" y="350" width="100" height="100" rx="10" class="s1-node" style="stroke: var(--text-main); fill: rgba(0, 255, 102, 0.05);" />
+                        <circle cx="400" cy="400" r="15" class="s1-node core" style="stroke: var(--neon-green);" />
+                        
+                    </g>
+                </svg>
+            </div>
+
+            <!-- Right Pane: Slide Text -->
+            <div class="slide-pane">
+                <h2>Section 1</h2>
+                <h1>The Question</h1>
+                <p>Modern Transformers rely on design choices made for large datasets.</p>
+                <p class="step-element" data-step="1"><strong style="color: var(--neon-green);">What actually survives when we shrink everything down to a small model and a small dataset?</strong></p>
+            </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- SECTION 2: EXPERIMENTAL LENS                            -->
+        <!-- ======================================================= -->
+        <section class="section-block" data-max-steps="4" id="sec-2">
+            <style>
+                /* --- Scoped Animations & Styles for Section 2 --- */
+                
+                #sec-2 .s2-node { fill: var(--panel-color); stroke-width: 3; transition: all 0.5s ease; }
+                #sec-2 .s2-node.core { stroke: var(--text-main); fill: var(--bg-color); }
+                #sec-2 .s2-flow { fill: none; stroke-width: 2; stroke-dasharray: 10, 10; animation: s2FlowAnim 1.2s linear infinite; }
+                @keyframes s2FlowAnim { to { stroke-dashoffset: -40; } }
+
+                /* Step 1: Model Sliding Up (Starts at +240px to match Sec 1 Center) */
+                #sec-2 .s2-nano-group { 
+                    transition: transform 1s cubic-bezier(0.25, 1, 0.5, 1); 
+                    transform-origin: 400px 160px; 
+                    transform: translateY(240px); 
+                }
+                #sec-2 .s2-t1.active-step ~ .visual-pane .s2-nano-group { 
+                    transform: translateY(0px); 
+                }
+
+                /* Step 2-4: Connecting Paths */
+                #sec-2 .s2-path { 
+                    fill: none; stroke-width: 3; 
+                    stroke-dasharray: 500; stroke-dashoffset: 500; 
+                    transition: stroke-dashoffset 0.8s cubic-bezier(0.25, 1, 0.5, 1); 
+                }
+                #sec-2 .s2-t2.active-step ~ .visual-pane .p-16 { stroke-dashoffset: 0; stroke: var(--neon-blue); }
+                #sec-2 .s2-t3.active-step ~ .visual-pane .p-4 { stroke-dashoffset: 0; stroke: var(--neon-purple); }
+                #sec-2 .s2-t4.active-step ~ .visual-pane .p-64 { stroke-dashoffset: 0; stroke: var(--neon-yellow); }
+
+                /* Step 2-4: Text Blocks Fading In (All using the same slide-up animation now) */
+                #sec-2 .s2-stat { opacity: 0; transition: all 0.6s ease 0.3s; }
+                #sec-2 .s2-stat-16 { transform: translateY(20px); color: var(--neon-blue); }
+                #sec-2 .s2-stat-4 { transform: translateY(20px); color: var(--neon-purple); }
+                #sec-2 .s2-stat-64 { transform: translateY(20px); color: var(--neon-yellow); } /* Changed to match the others */
+
+                #sec-2 .s2-t2.active-step ~ .visual-pane .s2-stat-16 { opacity: 1; transform: translateY(0); }
+                #sec-2 .s2-t3.active-step ~ .visual-pane .s2-stat-4 { opacity: 1; transform: translateY(0); }
+                #sec-2 .s2-t4.active-step ~ .visual-pane .s2-stat-64 { opacity: 1; transform: translateY(0); } /* Changed to match the others */
+            </style>
+            
+            <!-- Hidden state triggers mapped to Arrow Keys -->
+            <div class="step-element s2-t1" data-step="1" style="display:none;"></div>
+            <div class="step-element s2-t2" data-step="2" style="display:none;"></div>
+            <div class="step-element s2-t3" data-step="3" style="display:none;"></div>
+            <div class="step-element s2-t4" data-step="4" style="display:none;"></div>
+
+            <!-- Left Pane: Visuals -->
+            <div class="visual-pane">
+                <svg viewBox="0 0 800 800" style="width: 100%; height: 100%; max-height: 85vh;">
+                    
+                    <!-- SVG Paths connecting the elements -->
+                    <!-- Path to 16 Ablations -->
+                    <path class="s2-path p-16" d="M 400 320 L 400 380 L 200 380 L 200 450" />
+                    <!-- Path to 4 Seeds -->
+                    <path class="s2-path p-4" d="M 400 320 L 400 380 L 600 380 L 600 450" />
+                    <!-- Paths to 64 Runs -->
+                    <path class="s2-path p-64" d="M 200 590 L 200 630 L 400 630 L 400 660" />
+                    <path class="s2-path p-64" d="M 600 590 L 600 630 L 400 630 L 400 660" />
+
+                    <!-- 1. NanoGPT Model -->
+                    <g class="s2-nano-group">
+                        <path d="M 330 250 L 400 180" class="s2-flow" style="stroke: var(--neon-green);" />
+                        <path d="M 470 250 L 400 180" class="s2-flow" style="stroke: var(--neon-green);" />
+                        <path d="M 400 110 L 400 60" class="s2-flow" style="stroke: var(--neon-green);" />
+                        
+                        <rect x="290" y="250" width="80" height="15" rx="4" class="s2-node" style="stroke: var(--neon-green);" />
+                        <rect x="430" y="250" width="80" height="15" rx="4" class="s2-node" style="stroke: var(--neon-green);" />
+                        <rect x="360" y="45" width="80" height="15" rx="4" class="s2-node" style="stroke: var(--neon-green);" />
+                        
+                        <rect x="350" y="110" width="100" height="100" rx="10" class="s2-node" style="stroke: var(--text-main); fill: rgba(0, 255, 102, 0.05);" />
+                        <circle cx="400" cy="160" r="15" class="s2-node core" style="stroke: var(--neon-green);" />
+                        
+                        <text x="400" y="300" fill="var(--text-main)" font-family="monospace" font-size="20" text-anchor="middle" font-weight="bold">NanoGPT</text>
+                    </g>
+
+                    <!-- 2. "16 Ablations" Block -->
+                    <foreignObject x="50" y="450" width="300" height="140" class="s2-stat s2-stat-16">
+                        <div xmlns="http://www.w3.org/1999/xhtml" style="text-align: center;">
+                            <div style="font-size: 80px; font-weight: bold; line-height: 1.1; font-family: monospace;">16</div>
+                            <div style="font-size: 20px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 3px;">Ablations</div>
+                        </div>
+                    </foreignObject>
+
+                    <!-- 3. "4 Seeds" Block -->
+                    <foreignObject x="450" y="450" width="300" height="140" class="s2-stat s2-stat-4">
+                        <div xmlns="http://www.w3.org/1999/xhtml" style="text-align: center;">
+                            <div style="font-size: 80px; font-weight: bold; line-height: 1.1; font-family: monospace;">4</div>
+                            <div style="font-size: 20px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 3px;">Random Seeds</div>
+                        </div>
+                    </foreignObject>
+
+                    <!-- 4. "64 Total Runs" Block -->
+                    <foreignObject x="250" y="660" width="300" height="150" class="s2-stat s2-stat-64">
+                        <div xmlns="http://www.w3.org/1999/xhtml" style="text-align: center;">
+                            <div style="font-size: 100px; font-weight: bold; line-height: 1.1; font-family: monospace;">64</div>
+                            <div style="font-size: 22px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 3px;">Total Isolated Runs</div>
+                        </div>
+                    </foreignObject>
+
+                </svg>
+            </div>
+
+            <!-- Right Pane: Slide Text -->
+            <div class="slide-pane">
+                <h2>Section 2</h2>
+                <h1>Experimental Lens</h1>
+                
+                <!-- Step 0: Model & Dataset -->
+                <div class="step-element" data-step="0">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.6rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span>Model trained: <strong style="color: var(--neon-green);">NanoGPT</strong> (~10M parameters).</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span>Dataset: <strong style="color: var(--neon-green);">Tiny Shakespeare</strong>.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 1: Control Variables -->
+                <div class="step-element" data-step="1" style="margin-top: 1.2rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-orange); margin-right: 10px;">•</span>
+                            <span><strong style="color: var(--neon-orange);">Fully controlled ablation</strong> modifying only one parameter at a time. Optimizer, dataset, and capacity remain fixed.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+ 
+            </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- SECTION 3: THE DESIGN SPACE                             -->
+        <!-- ======================================================= -->
+        <section class="section-block" data-max-steps="1" id="sec-3">
+            <style>
+                /* --- Scoped Animations & Styles for Section 3 --- */
+                
+                /* NanoGPT Simple Model (Starts exactly where Sec 2 left off) */
+                #sec-3 .s3-simple-model { transform-origin: 400px 160px; opacity: 1; transform: translateY(0) scale(1); }
+                #sec-3 .s3-node { fill: var(--panel-color); stroke-width: 3; }
+                #sec-3 .s3-node.core { stroke: var(--text-main); fill: var(--bg-color); }
+                #sec-3 .s3-flow { fill: none; stroke-width: 2; stroke-dasharray: 10, 10; animation: s3FlowAnim 1.2s linear infinite; }
+                @keyframes s3FlowAnim { to { stroke-dashoffset: -40; } }
+
+                /* Step 1 Sequence: Simple Model glides to center, scales up, then fades out */
+                #sec-3 .s3-t1.active-step ~ .visual-pane .s3-simple-model { 
+                    animation: s3SimpleSequence 2s forwards cubic-bezier(0.25, 1, 0.5, 1); 
+                }
+                
+                @keyframes s3SimpleSequence {
+                    0% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
+                    35% { transform: translateY(200px) scale(1.6); opacity: 1; filter: blur(0); } /* Center & Enlarge */
+                    55% { transform: translateY(200px) scale(1.6); opacity: 1; filter: blur(0); } /* Hold */
+                    100% { transform: translateY(200px) scale(2.5); opacity: 0; filter: blur(15px); } /* Explode Out */
+                }
+
+                /* Complex Model Reveal (Centered in the 800x800 box) */
+                #sec-3 .s3-complex-model { opacity: 0; transform: scale(0.6); transform-origin: 400px 400px; pointer-events: none; }
+                #sec-3 .s3-t1.active-step ~ .visual-pane .s3-complex-model {
+                    animation: s3ComplexReveal 1.2s forwards cubic-bezier(0.25, 1, 0.5, 1);
+                    animation-delay: 1.2s; /* Triggers as the simple model fades */
+                }
+
+                @keyframes s3ComplexReveal {
+                    0% { opacity: 0; transform: scale(0.6); }
+                    100% { opacity: 1; transform: scale(1); }
+                }
+                
+                #sec-3 .s3-c-node { fill: rgba(22, 27, 34, 0.95); stroke-width: 2; rx: 6; }
+                #sec-3 .s3-c-text { fill: var(--text-muted); font-family: monospace; font-size: 14px; text-anchor: middle; dominant-baseline: middle; }
+                #sec-3 .s3-c-flow { fill: none; stroke-width: 2; stroke-dasharray: 10, 10; animation: s3FlowAnim 1s linear infinite; stroke: var(--neon-green); }                
+
+                /* Ablation Card Styling */
+                #sec-3 .s3-card { opacity: 0; }
+                #sec-3 .s3-card.left-card { transform: translateX(-40px); }
+                #sec-3 .s3-card.right-card { transform: translateX(40px); }
+                
+                #sec-3 .s3-t1.active-step ~ .visual-pane .s3-card {
+                    animation: s3CardSlideIn 0.8s forwards cubic-bezier(0.25, 1, 0.5, 1);
+                }
+                @keyframes s3CardSlideIn { to { opacity: 1; transform: translateX(0); } }
+
+                #sec-3 .s3-card-inner {
+                    width: 100%; height: 100%; background: rgba(13, 17, 23, 0.95);
+                    border: 1px solid var(--stroke); border-top-width: 4px;
+                    border-radius: 6px; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+                }
+                #sec-3 .s3-axis-lbl {
+                    position: absolute; top: 6px; left: 10px;
+                    font-family: monospace; font-size: 12px; font-weight: bold;
+                }
+                #sec-3 .s3-icon {
+                    position: absolute; top: 6px; right: 10px;
+                    font-family: monospace; font-size: 12px; font-weight: bold;
+                    background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px;
+                }
+                #sec-3 .s3-title {
+                    position: absolute; bottom: 12px; left: 10px;
+                    font-size: 14px; font-weight: 600; color: var(--text-main); line-height: 1.2;
+                    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                }
+                
+                /* Connection Dots */
+                #sec-3 .s3-conn-line { stroke: var(--stroke); stroke-width: 1.5; stroke-dasharray: 4, 4; opacity: 0; }
+                #sec-3 .s3-t1.active-step ~ .visual-pane .s3-conn-line { animation: s3LineFade 1s forwards 2.2s; }
+                @keyframes s3LineFade { to { opacity: 1; } }
+            </style>
+            
+            <!-- Hidden state trigger -->
+            <div class="step-element s3-t1" data-step="1" style="display:none;"></div>
+
+            <!-- Left Pane: Visuals -->
+            <div class="visual-pane">
+                <svg viewBox="0 0 800 800" style="width: 100%; height: 100%; max-height: 85vh;">
+                    
+                    <!-- ============================================== -->
+                    <!-- 1. SIMPLE NANOGPT (Starts at Top)              -->
+                    <!-- ============================================== -->
+                    <g class="s3-simple-model">
+                        <path d="M 330 250 L 400 180" class="s3-flow" style="stroke: var(--neon-green);" />
+                        <path d="M 470 250 L 400 180" class="s3-flow" style="stroke: var(--neon-green);" />
+                        <path d="M 400 110 L 400 60" class="s3-flow" style="stroke: var(--neon-green);" />
+                        <rect x="290" y="250" width="80" height="15" rx="4" class="s3-node" style="stroke: var(--neon-green);" />
+                        <rect x="430" y="250" width="80" height="15" rx="4" class="s3-node" style="stroke: var(--neon-green);" />
+                        <rect x="360" y="45" width="80" height="15" rx="4" class="s3-node" style="stroke: var(--neon-green);" />
+                        <rect x="350" y="110" width="100" height="100" rx="10" class="s3-node" style="stroke: var(--text-main); fill: rgba(0, 255, 102, 0.05);" />
+                        <circle cx="400" cy="160" r="15" class="s3-node core" style="stroke: var(--neon-green);" />
+                        <text x="400" y="300" fill="var(--text-main)" font-family="monospace" font-size="20" text-anchor="middle" font-weight="bold">NanoGPT</text>
+                    </g>
+
+                    <!-- ============================================== -->
+                    <!-- 2. EXPANDED COMPLEX ARCHITECTURE (Centered)    -->
+                    <!-- ============================================== -->
+                    <g class="s3-complex-model">
+                        
+                        <!-- Internal Flow Lines -->
+                        <path class="s3-c-flow" d="M 400 620 L 400 590" />
+                        <path class="s3-c-flow" d="M 400 560 L 400 520" />
+                        <path class="s3-c-flow" d="M 400 500 L 400 470" />
+                        <path class="s3-c-flow" d="M 400 410 L 400 380" />
+                        <path class="s3-c-flow" d="M 400 360 L 400 330" />
+                        <path class="s3-c-flow" d="M 400 250 L 400 180" />
+
+                        <!-- Residual Connection 1 (Around MHA) -->
+                        <path class="s3-c-flow" style="stroke: var(--neon-red);" d="M 400 525 C 270 525, 270 390, 400 390" />
+                        <!-- Residual Connection 2 (Around MLP) -->
+                        <path class="s3-c-flow" style="stroke: var(--neon-red);" d="M 400 380 C 270 380, 270 220, 400 220" />
+
+                        <!-- Core Transformer Blocks -->
+                        <!-- Input -->
+                        <rect x="330" y="620" width="140" height="30" class="s3-c-node" style="stroke: var(--stroke);" />
+                        <text x="400" y="635" class="s3-c-text" style="fill: var(--text-main);">Input Sequence</text>
+                        
+                        <!-- Positional Encoding -->
+                        <rect x="330" y="560" width="140" height="30" class="s3-c-node" style="stroke: var(--neon-yellow);" />
+                        <text x="400" y="575" class="s3-c-text" style="fill: var(--neon-yellow);">Pos Encoding</text>
+
+                        <!-- Layer Norm 1 -->
+                        <rect x="340" y="500" width="120" height="20" class="s3-c-node" style="stroke: var(--neon-blue);" />
+                        <text x="400" y="510" class="s3-c-text">Layer Norm</text>
+
+                        <!-- Multi-Head Attention -->
+                        <rect x="330" y="410" width="140" height="60" class="s3-c-node" style="stroke: var(--neon-pink);" />
+                        <text x="400" y="440" class="s3-c-text" style="fill: var(--text-main); font-weight: bold;">Multi-Head Attn</text>
+
+                        <!-- Layer Norm 2 -->
+                        <rect x="340" y="360" width="120" height="20" class="s3-c-node" style="stroke: var(--neon-blue);" />
+                        <text x="400" y="370" class="s3-c-text">Layer Norm</text>
+
+                        <!-- MLP / Activations -->
+                        <rect x="330" y="250" width="140" height="80" class="s3-c-node" style="stroke: var(--neon-orange);" />
+                        <text x="400" y="290" class="s3-c-text" style="fill: var(--text-main); font-weight: bold;">Feed Forward</text>
+
+                        <!-- Output Distribution -->
+                        <rect x="330" y="150" width="140" height="30" class="s3-c-node" style="stroke: var(--stroke);" />
+                        <text x="400" y="165" class="s3-c-text">Output Dist.</text>
+
+
+                        <!-- ============================================== -->
+                        <!-- 3. ABLATION CARDS & CONNECTORS                 -->
+                        <!-- ============================================== -->
+                        
+                        <!-- Connections to Cards -->
+                        <line x1="250" y1="635" x2="330" y2="635" class="s3-conn-line" /> <!-- Axis F (Context) -->
+                        <line x1="470" y1="575" x2="540" y2="575" class="s3-conn-line" /> <!-- Axis A (Pos Enc) -->
+                        <line x1="250" y1="510" x2="340" y2="510" class="s3-conn-line" /> <!-- Axis B (Norm) -->
+                        <line x1="470" y1="440" x2="540" y2="440" class="s3-conn-line" /> <!-- Axis C (Attn) -->
+                        <line x1="250" y1="360" x2="295" y2="360" class="s3-conn-line" /> <!-- Axis E (Res) -->
+                        <line x1="470" y1="290" x2="540" y2="290" class="s3-conn-line" /> <!-- Axis D (Act) -->
+                        <line x1="470" y1="260" x2="540" y2="135" class="s3-conn-line" /> <!-- Axis G (Weights) -->
+
+                        <!-- AXIS F: Context Length (Left) -->
+                        <foreignObject x="80" y="600" width="170" height="75" class="s3-card left-card" style="animation-delay: 1.6s;">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="s3-card-inner" style="border-top-color: var(--neon-electric);">
+                                <div class="s3-axis-lbl" style="color: var(--neon-electric);">Axis F</div>
+                                <div class="s3-icon" style="color: var(--neon-electric);">T=256</div>
+                                <div class="s3-title">Context Length</div>
+                            </div>
+                        </foreignObject>
+
+                        <!-- AXIS A: Positional Encoding (Right) -->
+                        <foreignObject x="540" y="535" width="170" height="75" class="s3-card right-card" style="animation-delay: 1.7s;">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="s3-card-inner" style="border-top-color: var(--neon-yellow);">
+                                <div class="s3-axis-lbl" style="color: var(--neon-yellow);">Axis A</div>
+                                <div class="s3-icon" style="color: var(--neon-yellow);">[sin,cos]</div>
+                                <div class="s3-title">Positional<br/>Encoding</div>
+                            </div>
+                        </foreignObject>
+
+                        <!-- AXIS B: Layer Normalization (Left) -->
+                        <foreignObject x="80" y="470" width="170" height="75" class="s3-card left-card" style="animation-delay: 1.8s;">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="s3-card-inner" style="border-top-color: var(--neon-blue);">
+                                <div class="s3-axis-lbl" style="color: var(--neon-blue);">Axis B</div>
+                                <div class="s3-icon" style="color: var(--neon-blue);">μ, σ</div>
+                                <div class="s3-title">Normalization<br/>Type & Position</div>
+                            </div>
+                        </foreignObject>
+
+                        <!-- AXIS C: Attention Heads (Right) -->
+                        <foreignObject x="540" y="405" width="170" height="75" class="s3-card right-card" style="animation-delay: 1.9s;">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="s3-card-inner" style="border-top-color: var(--neon-pink);">
+                                <div class="s3-axis-lbl" style="color: var(--neon-pink);">Axis C</div>
+                                <div class="s3-icon" style="color: var(--neon-pink);">Q,K,V</div>
+                                <div class="s3-title">Attention<br/>Heads</div>
+                            </div>
+                        </foreignObject>
+
+                        <!-- AXIS E: Residual Connections (Left) -->
+                        <foreignObject x="80" y="325" width="170" height="75" class="s3-card left-card" style="animation-delay: 2.0s;">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="s3-card-inner" style="border-top-color: var(--neon-red);">
+                                <div class="s3-axis-lbl" style="color: var(--neon-red);">Axis E</div>
+                                <div class="s3-icon" style="color: var(--neon-red);">+ F(x)</div>
+                                <div class="s3-title">Residual<br/>Connections</div>
+                            </div>
+                        </foreignObject>
+
+                        <!-- AXIS D: Activation Functions (Right) -->
+                        <foreignObject x="540" y="255" width="170" height="75" class="s3-card right-card" style="animation-delay: 2.1s;">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="s3-card-inner" style="border-top-color: var(--neon-orange);">
+                                <div class="s3-axis-lbl" style="color: var(--neon-orange);">Axis D</div>
+                                <div class="s3-icon" style="color: var(--neon-orange);">f(x)</div>
+                                <div class="s3-title">Activation<br/>Functions</div>
+                            </div>
+                        </foreignObject>
+
+                        <!-- AXIS G: Weight Precision (Right) -->
+                        <foreignObject x="540" y="100" width="170" height="75" class="s3-card right-card" style="animation-delay: 2.2s;">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="s3-card-inner" style="border-top-color: var(--neon-lime);">
+                                <div class="s3-axis-lbl" style="color: var(--neon-lime);">Axis G</div>
+                                <div class="s3-icon" style="color: var(--neon-lime);">FP32</div>
+                                <div class="s3-title">Weight<br/>Precision</div>
+                            </div>
+                        </foreignObject>
+
+                    </g>
+                </svg>
+            </div>
+
+<!-- Right Pane: Slide Text -->
+            <div class="slide-pane">
+                <h2>Section 3</h2>
+                <h1>The Design Space</h1>
+                
+                <p class="step-element" data-step="0">We structured the study across 7 distinct axes to evaluate how architectural components scale down.</p>
+                
+                <div class="step-element" data-step="1" style="margin-top: 1rem;">
+                    <p style="margin-bottom: 1rem; font-weight: bold; color: var(--text-main);">Systematic Variations Tested:</p>
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.8; font-size: 1.05rem;">
+                        <li style="margin-bottom: 0.5rem; display: flex; align-items: flex-start;">
+                            <div><strong style="color: var(--neon-yellow);">Positional Encodings:</strong> Learned vs. RoPE vs. ALiBi vs. None</div>
+                        </li>
+                        <li style="margin-bottom: 0.5rem; display: flex; align-items: flex-start;">
+                            <div><strong style="color: var(--neon-blue);">Normalization:</strong> Pre-LN vs. Post-LN vs. RMSNorm</div>
+                        </li>
+                        <li style="margin-bottom: 0.5rem; display: flex; align-items: flex-start;">
+                            <div><strong style="color: var(--neon-pink);">Attention Heads:</strong> 1 vs. 8 vs. 12 Heads</div>
+                        </li>
+                        <li style="margin-bottom: 0.5rem; display: flex; align-items: flex-start;">
+                            <div><strong style="color: var(--neon-orange);">Activation Functions:</strong> GELU vs. SwiGLU vs. ReLU</div>
+                        </li>
+                        <li style="margin-bottom: 0.5rem; display: flex; align-items: flex-start;">
+                            <div><strong style="color: var(--neon-red);">Residual Connections:</strong> Standard vs. Scaled vs. None</div>
+                        </li>
+                        <li style="margin-bottom: 0.5rem; display: flex; align-items: flex-start;">
+                            <div><strong style="color: var(--neon-electric);">Context Length:</strong> 128 vs. 256 vs. 512 Tokens</div>
+                        </li>
+                        <li style="margin-bottom: 0.5rem; display: flex; align-items: flex-start;">
+                            <div><strong style="color: var(--neon-lime);">Weight Precision:</strong> Standard FP32 vs. Ternary {-1, 0, 1}</div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- SECTION 4: OVERALL RESULTS                              -->
+        <!-- ======================================================= -->
+        <section class="section-block" data-max-steps="1" id="sec-4">
+            <style>
+                /* --- Scoped Animations & Styles for Section 4 --- */
+
+                /* NanoGPT Top Model (Uncolored) */
+                #sec-4 .s4-node { fill: var(--panel-color); stroke-width: 2; }
+                #sec-4 .s4-node.core { stroke: var(--text-main); fill: var(--bg-color); }
+                #sec-4 .s4-flow { fill: none; stroke-width: 2; stroke-dasharray: 6, 6; animation: s4FlowAnim 1s linear infinite; stroke: var(--text-muted); opacity: 0.5; }
+                @keyframes s4FlowAnim { to { stroke-dashoffset: -24; } }
+
+                /* Graph Grid and Text */
+                #sec-4 .s4-grid-line { stroke: var(--stroke); stroke-width: 1; stroke-dasharray: 4, 4; }
+                #sec-4 .s4-axis-text { fill: var(--text-muted); font-family: monospace; font-size: 12px; }
+                #sec-4 .s4-x-label { fill: var(--text-muted); font-family: monospace; font-size: 11px; text-anchor: end; transition: fill 0.3s; }
+                
+                /* Bar Animations via CSS Variables */
+                #sec-4 .s4-bar { 
+                    fill: #21262d; stroke: var(--stroke); stroke-width: 1; rx: 3;
+                    y: 650px; height: 0px; 
+                    transition: y 1s cubic-bezier(0.25, 1, 0.5, 1), height 1s cubic-bezier(0.25, 1, 0.5, 1);
+                }
+                
+                /* Highlight Colors */
+                #sec-4 .s4-bar.baseline { fill: rgba(0, 243, 255, 0.15); stroke: var(--neon-blue); }
+                #sec-4 .s4-bar.worst { fill: rgba(255, 51, 102, 0.15); stroke: var(--neon-red); }
+                #sec-4 .s4-bar.best { fill: rgba(0, 255, 102, 0.15); stroke: var(--neon-green); }
+
+                /* Triggering the Bar Growth */
+                #sec-4 .s4-t1.active-step ~ .visual-pane .s4-bar { 
+                    y: var(--target-y); height: var(--target-h); 
+                }
+
+                /* Error Bars (Variance) */
+                #sec-4 .s4-err {
+                    stroke: var(--text-main); stroke-width: 1.5; opacity: 0;
+                    y1: 650px; y2: 650px;
+                    transition: y1 1s cubic-bezier(0.25, 1, 0.5, 1), y2 1s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.5s ease 0.8s;
+                }
+                #sec-4 .s4-t1.active-step ~ .visual-pane .s4-err {
+                    y1: var(--err-top); y2: var(--err-bot); opacity: 0.6;
+                }
+
+                /* Callout Text Above Bars */
+                #sec-4 .s4-bar-text { fill: var(--text-main); font-family: monospace; font-size: 14px; font-weight: bold; text-anchor: middle; opacity: 0; transition: opacity 0.5s ease 1s; }
+                #sec-4 .s4-t1.active-step ~ .visual-pane .s4-bar-text { opacity: 1; }
+
+                /* Connection Arrow (FIXED: Increased dasharray to hide full path length) */
+                #sec-4 .s4-conn-arrow { 
+                    fill: none; stroke: var(--neon-blue); stroke-width: 2; stroke-dasharray: 1000; stroke-dashoffset: 1000; 
+                    transition: stroke-dashoffset 1.2s cubic-bezier(0.25, 1, 0.5, 1);
+                }
+                #sec-4 .s4-t1.active-step ~ .visual-pane .s4-conn-arrow { stroke-dashoffset: 0; }
+                #sec-4 .s4-t1.active-step ~ .visual-pane .s4-arrowhead { opacity: 1; transition: opacity 0.2s ease 1.1s; }
+                #sec-4 .s4-arrowhead { opacity: 0; fill: var(--neon-blue); }
+                
+            </style>
+            
+            <!-- Hidden state trigger -->
+            <div class="step-element s4-t1" data-step="1" style="display:none;"></div>
+
+            <!-- Left Pane: Visuals -->
+            <div class="visual-pane">
+                <svg viewBox="-50 0 1100 850" style="width: 100%; height: 100%;">
+                    
+                    <defs>
+                        <!-- Arrowhead marker for the baseline connection -->
+                        <marker id="arrow-blue" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" class="s4-arrowhead" />
+                        </marker>
+                    </defs>
+
+                    <!-- ============================================== -->
+                    <!-- 1. MINI NANOGPT (TOP CENTER - UNCOLORED)       -->
+                    <!-- ============================================== -->
+                    <g transform="translate(500, 70) scale(0.7)">
+                        <path d="M -40 60 L 0 0" class="s4-flow" />
+                        <path d="M 40 60 L 0 0" class="s4-flow" />
+                        <!-- Core layer -->
+                        <rect x="-60" y="-60" width="120" height="120" rx="10" class="s4-node" style="stroke: var(--text-muted); fill: var(--panel-color);" />
+                        <circle cx="0" cy="0" r="20" class="s4-node core" style="stroke: var(--text-main);" />
+                        <text x="0" y="90" fill="var(--text-main)" font-family="monospace" font-size="22" text-anchor="middle" font-weight="bold">Baseline Model</text>
+                    </g>
+
+                    <!-- ============================================== -->
+                    <!-- 2. GRAPH AXES & GRIDLINES                      -->
+                    <!-- ============================================== -->
+                    
+                    <!-- Y Axis Grid (Base 1.0 to Max 3.5. Range = 2.5. Height = 350px) -->
+                    <!-- 3.5 -->
+                    <line x1="80" y1="300" x2="950" y2="300" class="s4-grid-line" />
+                    <text x="70" y="304" class="s4-axis-text" text-anchor="end">3.5</text>
+                    <!-- 3.0 -->
+                    <line x1="80" y1="370" x2="950" y2="370" class="s4-grid-line" />
+                    <text x="70" y="374" class="s4-axis-text" text-anchor="end">3.0</text>
+                    <!-- 2.5 -->
+                    <line x1="80" y1="440" x2="950" y2="440" class="s4-grid-line" />
+                    <text x="70" y="444" class="s4-axis-text" text-anchor="end">2.5</text>
+                    <!-- 2.0 -->
+                    <line x1="80" y1="510" x2="950" y2="510" class="s4-grid-line" />
+                    <text x="70" y="514" class="s4-axis-text" text-anchor="end">2.0</text>
+                    <!-- 1.5 -->
+                    <line x1="80" y1="580" x2="950" y2="580" class="s4-grid-line" />
+                    <text x="70" y="584" class="s4-axis-text" text-anchor="end">1.5</text>
+                    
+                    <!-- Base X Axis (1.0) -->
+                    <line x1="80" y1="650" x2="950" y2="650" class="s4-grid-line" style="stroke-dasharray: none; stroke: var(--text-main);" />
+                    <text x="70" y="654" class="s4-axis-text" text-anchor="end">1.0</text>
+
+                    <!-- Legend -->
+                    <rect x="100" y="220" width="12" height="12" rx="2" fill="rgba(0, 243, 255, 0.15)" stroke="var(--neon-blue)" />
+                    <text x="120" y="230" class="s4-axis-text">Baseline</text>
+                    
+                    <rect x="200" y="220" width="12" height="12" rx="2" fill="rgba(0, 255, 102, 0.15)" stroke="var(--neon-green)" />
+                    <text x="220" y="230" class="s4-axis-text">Best Performance</text>
+                    
+                    <rect x="360" y="220" width="12" height="12" rx="2" fill="rgba(255, 51, 102, 0.15)" stroke="var(--neon-red)" />
+                    <text x="380" y="230" class="s4-axis-text">Worst Performance</text>
+
+                    <!-- ============================================== -->
+                    <!-- 3. DATA BARS (Math Pre-calculated from Data)   -->
+                    <!-- ============================================== -->
+                    
+                    <g transform="translate(0, 0)">
+                        <!-- 1. A1 -->
+                        <rect x="114" width="24" class="s4-bar" style="--target-y: 571px; --target-h: 79px;" />
+                        <line x1="126" x2="126" class="s4-err" style="--err-top: 568px; --err-bot: 574px;" />
+                        <text x="126" y="670" class="s4-x-label" transform="rotate(-45 126 670)">A1_no_pos_encoding</text>
+
+                        <!-- 2. A2 -->
+                        <rect x="167" width="24" class="s4-bar" style="--target-y: 547px; --target-h: 103px;" />
+                        <line x1="179" x2="179" class="s4-err" style="--err-top: 545px; --err-bot: 549px;" />
+                        <text x="179" y="670" class="s4-x-label" transform="rotate(-45 179 670)">A2_rope</text>
+
+                        <!-- 3. A3 -->
+                        <rect x="220" width="24" class="s4-bar" style="--target-y: 537px; --target-h: 113px;" />
+                        <line x1="232" x2="232" class="s4-err" style="--err-top: 536px; --err-bot: 538px;" />
+                        <text x="232" y="670" class="s4-x-label" transform="rotate(-45 232 670)">A3_alibi</text>
+
+                        <!-- 4. B1 -->
+                        <rect x="273" width="24" class="s4-bar" style="--target-y: 554px; --target-h: 96px;" />
+                        <line x1="285" x2="285" class="s4-err" style="--err-top: 553px; --err-bot: 555px;" />
+                        <text x="285" y="670" class="s4-x-label" transform="rotate(-45 285 670)">B1_rmsnorm</text>
+
+                        <!-- 5. B2 -->
+                        <rect x="326" width="24" class="s4-bar" style="--target-y: 571px; --target-h: 79px;" />
+                        <line x1="338" x2="338" class="s4-err" style="--err-top: 569px; --err-bot: 573px;" />
+                        <text x="338" y="670" class="s4-x-label" transform="rotate(-45 338 670)">B2_post_ln</text>
+
+                        <!-- 6. C1 -->
+                        <rect x="379" width="24" class="s4-bar" style="--target-y: 578px; --target-h: 72px;" />
+                        <line x1="391" x2="391" class="s4-err" style="--err-top: 577px; --err-bot: 579px;" />
+                        <text x="391" y="670" class="s4-x-label" transform="rotate(-45 391 670)">C1_1_head</text>
+
+                        <!-- 7. C2 -->
+                        <rect x="432" width="24" class="s4-bar" style="--target-y: 552px; --target-h: 98px;" />
+                        <line x1="444" x2="444" class="s4-err" style="--err-top: 550px; --err-bot: 554px;" />
+                        <text x="444" y="670" class="s4-x-label" transform="rotate(-45 444 670)">C2_8_heads</text>
+
+                        <!-- 8. C3 -->
+                        <rect x="485" width="24" class="s4-bar" style="--target-y: 551px; --target-h: 99px;" />
+                        <line x1="497" x2="497" class="s4-err" style="--err-top: 549px; --err-bot: 553px;" />
+                        <text x="497" y="670" class="s4-x-label" transform="rotate(-45 497 670)">C3_12_heads</text>
+
+                        <!-- 9. D1 -->
+                        <rect x="538" width="24" class="s4-bar" style="--target-y: 566px; --target-h: 84px;" />
+                        <line x1="550" x2="550" class="s4-err" style="--err-top: 564px; --err-bot: 568px;" />
+                        <text x="550" y="670" class="s4-x-label" transform="rotate(-45 550 670)">D1_relu</text>
+
+                        <!-- 10. D2 -->
+                        <rect x="591" width="24" class="s4-bar" style="--target-y: 526px; --target-h: 124px;" />
+                        <line x1="603" x2="603" class="s4-err" style="--err-top: 525px; --err-bot: 527px;" />
+                        <text x="603" y="670" class="s4-x-label" transform="rotate(-45 603 670)">D2_swiglu</text>
+
+                        <!-- 11. E1 -->
+                        <rect x="644" width="24" class="s4-bar" style="--target-y: 555px; --target-h: 95px;" />
+                        <line x1="656" x2="656" class="s4-err" style="--err-top: 554px; --err-bot: 556px;" />
+                        <text x="656" y="670" class="s4-x-label" transform="rotate(-45 656 670)">E1_scaled_residual</text>
+
+                        <!-- 12. E2 (WORST - RED) -->
+                        <rect x="697" width="24" class="s4-bar worst" style="--target-y: 320px; --target-h: 330px;" />
+                        <line x1="709" x2="709" class="s4-err" style="--err-top: 319px; --err-bot: 321px;" />
+                        <text x="709" y="305" class="s4-bar-text" style="fill: var(--neon-red);">3.35</text>
+                        <text x="709" y="670" class="s4-x-label" transform="rotate(-45 709 670)" style="fill: var(--neon-red); font-weight: bold;">E2_no_residuals</text>
+
+                        <!-- 13. F1 -->
+                        <rect x="750" width="24" class="s4-bar" style="--target-y: 581px; --target-h: 69px;" />
+                        <line x1="762" x2="762" class="s4-err" style="--err-top: 580px; --err-bot: 582px;" />
+                        <text x="762" y="670" class="s4-x-label" transform="rotate(-45 762 670)">F1_context_128</text>
+
+                        <!-- 14. F2 -->
+                        <rect x="803" width="24" class="s4-bar" style="--target-y: 509px; --target-h: 141px;" />
+                        <line x1="815" x2="815" class="s4-err" style="--err-top: 507px; --err-bot: 511px;" />
+                        <text x="815" y="670" class="s4-x-label" transform="rotate(-45 815 670)">F2_context_512</text>
+
+                        <!-- 15. G1 (BEST - GREEN) -->
+                        <rect x="856" width="24" class="s4-bar best" style="--target-y: 585px; --target-h: 65px;" />
+                        <line x1="868" x2="868" class="s4-err" style="--err-top: 584px; --err-bot: 586px;" />
+                        <text x="868" y="570" class="s4-bar-text" style="fill: var(--neon-green);">1.47</text>
+                        <text x="868" y="670" class="s4-x-label" transform="rotate(-45 868 670)" style="fill: var(--neon-green); font-weight: bold;">G1_ternary_weights</text>
+
+                        <!-- 16. BASELINE (BLUE) -->
+                        <rect x="909" width="24" class="s4-bar baseline" style="--target-y: 553px; --target-h: 97px;" id="base-bar" />
+                        <line x1="921" x2="921" class="s4-err" style="--err-top: 552px; --err-bot: 554px;" />
+                        <text x="921" y="538" class="s4-bar-text" style="fill: var(--neon-blue);">1.69</text>
+                        <text x="921" y="670" class="s4-x-label" transform="rotate(-45 921 670)" style="fill: var(--neon-blue); font-weight: bold;">baseline</text>
+
+                        <!-- Connection Arrow from NanoGPT to Baseline Bar -->
+                        <!-- Route: Down from model (500, 140), right to baseline bar (921, 140), down to top of bar (921, 545) -->
+                        <path class="s4-conn-arrow" d="M 500 140 L 500 180 L 921 180 L 921 510" marker-end="url(#arrow-blue)" stroke-linejoin="round" />
+                    </g>
+                </svg>
+            </div>
+
+            <!-- Right Pane: Slide Text -->
+<!-- Right Pane: Slide Text -->
+            <div class="slide-pane">
+                <h2>Section 4</h2>
+                <h1>Overall Results</h1>
+                
+                <!-- Step 0: Baseline Metrics -->
+                <div class="step-element" data-step="0">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-blue); margin-right: 10px;">•</span>
+                            <span>Standard baseline model establishes a validation loss of <strong style="color: var(--neon-blue);">1.69</strong>.</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-blue); margin-right: 10px;">•</span>
+                            <span>Baseline training completes in approximately <strong style="color: var(--neon-blue);">730 seconds</strong>.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 1: Broad Variance Across Ablations -->
+                <div class="step-element" data-step="1" style="margin-top: 1.5rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--text-muted); margin-right: 10px;">•</span>
+                            <span>Architectural changes triggered massive performance variance across runs.</span>
+                        </li>
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-red); margin-right: 10px;">•</span>
+                            <span>Worst-performing configuration spiked validation loss to <strong style="color: var(--neon-red);">3.35</strong>.</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span>Best-performing configuration reduced validation loss down to <strong style="color: var(--neon-green);">1.47</strong>.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- SECTION 5: RESIDUAL CONNECTIONS                         -->
+        <!-- ======================================================= -->
+        <section class="section-block" data-max-steps="2" id="sec-5">
+            <style>
+                /* --- Scoped Animations & Styles for Section 5 --- */
+
+                /* Architecture Diagram Styles */
+                #sec-5 .s5-node { fill: rgba(22, 27, 34, 0.8); stroke: var(--stroke); stroke-width: 2; rx: 8; transition: all 0.5s ease; }
+                #sec-5 .s5-text { fill: var(--text-main); font-family: monospace; font-size: 16px; font-weight: bold; text-anchor: middle; }
+                #sec-5 .s5-lbl { fill: var(--text-muted); font-family: monospace; font-size: 12px; text-anchor: middle; }
+                
+                /* Flowing Data Lines */
+                #sec-5 .s5-flow { fill: none; stroke: var(--neon-blue); stroke-width: 3; stroke-dasharray: 10, 10; animation: s5FlowAnim 1s linear infinite; }
+                @keyframes s5FlowAnim { to { stroke-dashoffset: -20; } }
+                
+                /* Residual Broken State */
+                #sec-5 .s5-res-broken { stroke: var(--stroke); stroke-width: 3; fill: none; stroke-dasharray: 4, 4; transition: all 0.5s ease; }
+                
+                /* Centered X Mark Animation */
+                #sec-5 .s5-x-mark { opacity: 0; stroke: var(--neon-red); stroke-width: 4; stroke-linecap: round; fill: none; transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); transform-origin: 437.5px 130px; transform: scale(0); }
+                
+                #sec-5 .s5-t1.active-step ~ .visual-pane .s5-res-broken { stroke: var(--neon-red); }
+                #sec-5 .s5-t1.active-step ~ .visual-pane .s5-x-mark { opacity: 1; transform: scale(1); }
+                #sec-5 .s5-t1.active-step ~ .visual-pane .s5-node-ablated { stroke: var(--neon-red); fill: rgba(255, 51, 102, 0.1); }
+
+                /* Graph Styles */
+                #sec-5 .s5-axis { stroke: var(--stroke); stroke-width: 2; }
+                #sec-5 .s5-grid { stroke: var(--stroke); stroke-width: 1; stroke-dasharray: 4, 4; opacity: 0.5; }
+                
+                /* Bars - Base starts at y=720 (0.0) */
+                #sec-5 .s5-bar { width: 60px; rx: 4; y: 720px; height: 0px; transition: y 0.8s cubic-bezier(0.25, 1, 0.5, 1), height 0.8s cubic-bezier(0.25, 1, 0.5, 1); }
+                #sec-5 .s5-bar.base { fill: rgba(0, 243, 255, 0.2); stroke: var(--neon-blue); stroke-width: 2; }
+                #sec-5 .s5-bar.none { fill: rgba(255, 51, 102, 0.2); stroke: var(--neon-red); stroke-width: 2; }
+                #sec-5 .s5-bar.scaled { fill: rgba(255, 204, 0, 0.2); stroke: var(--neon-yellow); stroke-width: 2; }
+                
+                /* Data values over bars */
+                #sec-5 .s5-val { fill: var(--text-main); font-family: monospace; font-size: 18px; font-weight: bold; text-anchor: middle; opacity: 0; transition: opacity 0.5s ease 0.6s; }
+                
+                /* Step 0 -> Base Bar (1.69) */
+                /* Scale: 80px per 1.0 unit. Base is 720px. 1.69 * 80 = 135.2px height */
+                #sec-5 .base { y: 584.8px; height: 135.2px; } 
+                #sec-5 .val-base { opacity: 1; }
+
+                /* Step 1 -> Red Bar Shoots Up (3.35) */
+                /* 3.35 * 80 = 268px height */
+                #sec-5 .s5-t1.active-step ~ .visual-pane .none { y: 452px; height: 268px; }
+                #sec-5 .s5-t1.active-step ~ .visual-pane .val-none { opacity: 1; }
+
+                /* Step 2 -> Scaled Bar Appears (1.68) */
+                /* 1.68 * 80 = 134.4px height */
+                #sec-5 .s5-t2.active-step ~ .visual-pane .scaled { y: 585.6px; height: 134.4px; }
+                #sec-5 .s5-t2.active-step ~ .visual-pane .val-scaled { opacity: 1; }
+                
+            </style>
+            
+            <!-- Hidden state triggers -->
+            <div class="step-element s5-t1" data-step="1" style="display:none;"></div>
+            <div class="step-element s5-t2" data-step="2" style="display:none;"></div>
+
+            <!-- Left Pane: Visuals -->
+            <div class="visual-pane">
+                <svg viewBox="0 0 800 800" style="width: 100%; height: 100%; max-height: 85vh;">
+                    
+                    <!-- ============================================== -->
+                    <!-- TOP HALF: ARCHITECTURE VISUALIZATION           -->
+                    <!-- ============================================== -->
+
+                    <!-- LEFT: Intact Architecture -->
+                    <g transform="translate(0, 50)">
+                        <text x="250" y="20" class="s5-text" style="fill: var(--neon-blue);">Intact Residual</text>
+                        
+                        <!-- Block -->
+                        <rect x="180" y="80" width="140" height="100" class="s5-node" style="stroke: var(--neon-blue); fill: rgba(0, 243, 255, 0.05);" />
+                        <text x="250" y="135" class="s5-text">F(x)</text>
+                        
+                        <!-- Main flow -->
+                        <path d="M 250 250 L 250 180" class="s5-flow" />
+                        <path d="M 250 80 L 250 10" class="s5-flow" />
+                        
+                        <!-- Residual flow (Skip Connection) -->
+                        <path d="M 250 220 C 100 220, 100 40, 250 40" class="s5-flow" style="stroke: var(--neon-green);" />
+                        <text x="110" y="135" class="s5-text" style="fill: var(--neon-green);">+ x</text>
+                        
+                        <!-- Addition Node -->
+                        <circle cx="250" cy="40" r="15" class="s5-node" style="stroke: var(--neon-green);" />
+                        <text x="250" y="45" class="s5-text" style="fill: var(--neon-green);">+</text>
+                    </g>
+
+                    <!-- RIGHT: Ablated Architecture -->
+                    <g transform="translate(0, 50)">
+                        <text x="550" y="20" class="s5-text" style="fill: var(--text-muted);">Ablated (No Residual)</text>
+                        
+                        <!-- Block -->
+                        <rect x="480" y="80" width="140" height="100" class="s5-node s5-node-ablated" />
+                        <text x="550" y="135" class="s5-text">F(x)</text>
+                        
+                        <!-- Main flow -->
+                        <path d="M 550 250 L 550 180" class="s5-flow" />
+                        <path d="M 550 80 L 550 10" class="s5-flow" />
+                        
+                        <!-- Broken Residual -->
+                        <path d="M 550 220 C 400 220, 400 40, 550 40" class="s5-res-broken" />
+                        
+                        <!-- The Big Red X (Mathematically centered on curve at 437.5, 130) -->
+                        <g class="s5-x-mark">
+                            <line x1="422.5" y1="115" x2="452.5" y2="145" />
+                            <line x1="452.5" y1="115" x2="422.5" y2="145" />
+                        </g>
+                    </g>
+
+
+                    <!-- ============================================== -->
+                    <!-- BOTTOM HALF: DATA GRAPH                        -->
+                    <!-- ============================================== -->
+
+                    <g transform="translate(0, 20)">
+                        <text x="400" y="340" class="s5-text" style="font-size: 20px;">Validation Loss Impact</text>
+
+                        <!-- Y Axis (0.0 to 4.0 - True Scale) -->
+                        <line x1="100" y1="400" x2="700" y2="400" class="s5-grid" />
+                        <text x="80" y="405" class="s5-lbl" text-anchor="end">4.0</text>
+                        
+                        <line x1="100" y1="480" x2="700" y2="480" class="s5-grid" />
+                        <text x="80" y="485" class="s5-lbl" text-anchor="end">3.0</text>
+                        
+                        <line x1="100" y1="560" x2="700" y2="560" class="s5-grid" />
+                        <text x="80" y="565" class="s5-lbl" text-anchor="end">2.0</text>
+                        
+                        <line x1="100" y1="640" x2="700" y2="640" class="s5-grid" />
+                        <text x="80" y="645" class="s5-lbl" text-anchor="end">1.0</text>
+
+                        <!-- Base 0.0 line -->
+                        <line x1="100" y1="720" x2="700" y2="720" class="s5-axis" />
+                        <text x="80" y="725" class="s5-lbl" text-anchor="end" style="fill: var(--text-main);">0.0</text>
+
+                        <!-- Bars -->
+                        <!-- Baseline (1.69) -->
+                        <rect x="200" class="s5-bar base" />
+                        <text x="230" y="573" class="s5-val val-base" style="fill: var(--neon-blue);">1.69</text>
+                        <text x="230" y="745" class="s5-lbl">Baseline</text>
+
+                        <!-- No Residuals (3.35) -->
+                        <rect x="370" class="s5-bar none" />
+                        <text x="400" y="440" class="s5-val val-none" style="fill: var(--neon-red); font-size: 24px;">3.35</text>
+                        <text x="400" y="745" class="s5-lbl">No Residuals</text>
+
+                        <!-- Scaled Residuals (1.68) -->
+                        <rect x="540" class="s5-bar scaled" />
+                        <text x="570" y="573" class="s5-val val-scaled" style="fill: var(--neon-yellow);">1.68</text>
+                        <text x="570" y="745" class="s5-lbl">Scaled Res.</text>
+                    </g>
+
+                </svg>
+            </div>
+
+<!-- Right Pane: Slide Text -->
+            <div class="slide-pane">
+                <h2>Section 5</h2>
+                <h1>Residual Connections</h1>
+                
+                <!-- Step 0: Introduction -->
+                <div class="step-element" data-step="0">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-blue); margin-right: 10px;">•</span>
+                            <span>Acts as a critical <strong>skip pathway</strong> that bypasses transformer blocks.</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-blue); margin-right: 10px;">•</span>
+                            <span>Preserves the vital <strong>flow of gradients</strong> during optimization.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 1: Removing Residuals -->
+                <div class="step-element" data-step="1" style="margin-top: 1.5rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-red); margin-right: 10px;">•</span>
+                            <span>Removing pathways causes training to <strong style="color: var(--neon-red);">completely fail</strong>.</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-red); margin-right: 10px;">•</span>
+                            <span>Validation loss spikes sharply to <strong style="color: var(--neon-red);">3.35</strong>, collapsing output to noise.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 2: Verification / Alternative -->
+                <div class="step-element" data-step="2" style="margin-top: 1.5rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-yellow); margin-right: 10px;">•</span>
+                            <span>Proves that skip connections are <strong>not optional</strong> even at micro-scale.</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-yellow); margin-right: 10px;">•</span>
+                            <span><strong style="color: var(--neon-yellow);">Scaled Residuals</strong> perform nearly identically to standard with a <strong style="color: var(--neon-yellow);">1.68</strong> loss.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- SECTION 6: CONTEXT LENGTH                               -->
+        <!-- ======================================================= -->
+        <section class="section-block" data-max-steps="2" id="sec-6">
+            <style>
+                /* --- Scoped Animations & Styles for Section 6 --- */
+
+                /* Context Blocks Visualization */
+                #sec-6 .s6-ctx-box { fill: rgba(22, 27, 34, 0.5); stroke: var(--stroke); stroke-width: 2; rx: 4; transition: all 0.5s ease; }
+                #sec-6 .s6-ctx-lbl { fill: var(--text-muted); font-family: monospace; font-size: 14px; font-weight: bold; transition: all 0.5s ease; }
+                
+                /* Active States for Context Blocks */
+                #sec-6 .ctx-base { stroke: var(--neon-blue); fill: rgba(0, 243, 255, 0.1); }
+                #sec-6 .lbl-base { fill: var(--neon-blue); }
+
+                #sec-6 .s6-t1.active-step ~ .visual-pane .ctx-128 { stroke: var(--neon-green); fill: rgba(0, 255, 102, 0.1); }
+                #sec-6 .s6-t1.active-step ~ .visual-pane .lbl-128 { fill: var(--neon-green); }
+
+                #sec-6 .s6-t2.active-step ~ .visual-pane .ctx-512 { stroke: var(--neon-red); fill: rgba(255, 51, 102, 0.1); }
+                #sec-6 .s6-t2.active-step ~ .visual-pane .lbl-512 { fill: var(--neon-red); }
+
+                /* Graph Grids */
+                #sec-6 .s6-grid { stroke: var(--stroke); stroke-width: 1; stroke-dasharray: 4, 4; opacity: 0.5; }
+                #sec-6 .s6-axis { stroke: var(--stroke); stroke-width: 2; }
+                #sec-6 .s6-axis-lbl { fill: var(--text-muted); font-family: monospace; font-size: 12px; }
+
+                /* Dual Chart Bars */
+                #sec-6 .s6-bar { width: 50px; rx: 4; y: 700px; height: 0px; transition: y 0.8s cubic-bezier(0.25, 1, 0.5, 1), height 0.8s cubic-bezier(0.25, 1, 0.5, 1); }
+                
+                /* Bar Colors */
+                #sec-6 .bar-base { fill: rgba(0, 243, 255, 0.2); stroke: var(--neon-blue); stroke-width: 2; }
+                #sec-6 .bar-128 { fill: rgba(0, 255, 102, 0.2); stroke: var(--neon-green); stroke-width: 2; }
+                #sec-6 .bar-512 { fill: rgba(255, 51, 102, 0.2); stroke: var(--neon-red); stroke-width: 2; }
+
+                /* Data Values */
+                #sec-6 .s6-val { fill: var(--text-main); font-family: monospace; font-size: 16px; font-weight: bold; text-anchor: middle; opacity: 0; transition: opacity 0.5s ease 0.6s; }
+
+                /* --- Step 0: Baseline (256) --- */
+                #sec-6 .base-loss { y: 585px; height: 115px; } /* 1.69 */
+                #sec-6 .base-time { y: 586px; height: 114px; } /* 730s */
+                #sec-6 .val-base { opacity: 1; }
+
+                /* --- Step 1: Context 128 --- */
+                #sec-6 .s6-t1.active-step ~ .visual-pane .c128-loss { y: 619px; height: 81px; } /* 1.49 */
+                #sec-6 .s6-t1.active-step ~ .visual-pane .c128-time { y: 649px; height: 51px; } /* 330s */
+                #sec-6 .s6-t1.active-step ~ .visual-pane .val-128 { opacity: 1; }
+
+                /* --- Step 2: Context 512 --- */
+                #sec-6 .s6-t2.active-step ~ .visual-pane .c512-loss { y: 532px; height: 168px; } /* 2.01 */
+                #sec-6 .s6-t2.active-step ~ .visual-pane .c512-time { y: 459px; height: 241px; } /* 1544s */
+                #sec-6 .s6-t2.active-step ~ .visual-pane .val-512 { opacity: 1; }
+                
+            </style>
+            
+            <!-- Hidden state triggers -->
+            <div class="step-element s6-t1" data-step="1" style="display:none;"></div>
+            <div class="step-element s6-t2" data-step="2" style="display:none;"></div>
+
+            <!-- Left Pane: Visuals -->
+            <div class="visual-pane">
+                <svg viewBox="0 0 800 800" style="width: 100%; height: 100%; max-height: 85vh;">
+                    
+                    <!-- ============================================== -->
+                    <!-- TOP HALF: CONTEXT BLOCKS VISUALIZATION         -->
+                    <!-- ============================================== -->
+                    <g transform="translate(100, 50)">
+                        <text x="300" y="20" class="s6-axis-lbl" style="font-size: 16px; text-anchor: middle;">Context Window Size (Tokens)</text>
+                        
+                        <!-- 128 Box (Top) -->
+                        <text x="30" y="75" class="s6-ctx-lbl lbl-128" text-anchor="end">128</text>
+                        <rect x="50" y="50" width="128" height="35" class="s6-ctx-box ctx-128" />
+                        
+                        <!-- 256 Box (Middle - Baseline) -->
+                        <text x="30" y="135" class="s6-ctx-lbl lbl-base" text-anchor="end">256</text>
+                        <rect x="50" y="110" width="256" height="35" class="s6-ctx-box ctx-base" />
+                        
+                        <!-- 512 Box (Bottom) -->
+                        <text x="30" y="195" class="s6-ctx-lbl lbl-512" text-anchor="end">512</text>
+                        <rect x="50" y="170" width="512" height="35" class="s6-ctx-box ctx-512" />
+                        
+                        <!-- Ruler scale -->
+                        <line x1="50" y1="220" x2="562" y2="220" class="s6-axis" />
+                        <line x1="50" y1="220" x2="50" y2="230" class="s6-axis" />
+                        <line x1="178" y1="220" x2="178" y2="230" class="s6-axis" />
+                        <line x1="306" y1="220" x2="306" y2="230" class="s6-axis" />
+                        <line x1="562" y1="220" x2="562" y2="230" class="s6-axis" />
+                    </g>
+
+
+                    <!-- ============================================== -->
+                    <!-- BOTTOM HALF: DUAL GRAPHS (LOSS vs TIME)        -->
+                    <!-- ============================================== -->
+                    
+                    <g transform="translate(0, 50)">
+                        
+                        <!-- GRAPH 1: VALIDATION LOSS (Left side) -->
+                        <text x="225" y="380" class="s6-axis-lbl" style="font-size: 16px; text-anchor: middle; fill: var(--text-main);">Validation Loss</text>
+                        
+                        <!-- Y Axis (1.0 to 2.5) -->
+                        <line x1="80" y1="450" x2="370" y2="450" class="s6-grid" />
+                        <text x="70" y="455" class="s6-axis-lbl" text-anchor="end">2.5</text>
+                        
+                        <line x1="80" y1="533" x2="370" y2="533" class="s6-grid" />
+                        <text x="70" y="538" class="s6-axis-lbl" text-anchor="end">2.0</text>
+                        
+                        <line x1="80" y1="616" x2="370" y2="616" class="s6-grid" />
+                        <text x="70" y="621" class="s6-axis-lbl" text-anchor="end">1.5</text>
+                        
+                        <line x1="80" y1="700" x2="370" y2="700" class="s6-axis" />
+                        <text x="70" y="705" class="s6-axis-lbl" text-anchor="end">1.0</text>
+
+                        <!-- Loss Bars -->
+                        <rect x="120" class="s6-bar bar-128 c128-loss" />
+                        <text x="145" y="609" class="s6-val val-128" style="fill: var(--neon-green);">1.49</text>
+                        <text x="145" y="725" class="s6-axis-lbl" text-anchor="middle">Ctx-128</text>
+
+                        <rect x="200" class="s6-bar bar-base base-loss" />
+                        <text x="225" y="575" class="s6-val val-base" style="fill: var(--neon-blue);">1.69</text>
+                        <text x="225" y="725" class="s6-axis-lbl" text-anchor="middle">Ctx-256</text>
+
+                        <rect x="280" class="s6-bar bar-512 c512-loss" />
+                        <text x="305" y="522" class="s6-val val-512" style="fill: var(--neon-red);">2.01</text>
+                        <text x="305" y="725" class="s6-axis-lbl" text-anchor="middle">Ctx-512</text>
+
+
+                        <!-- GRAPH 2: RUNTIME (Right side) -->
+                        <text x="585" y="380" class="s6-axis-lbl" style="font-size: 16px; text-anchor: middle; fill: var(--text-main);">Runtime (Seconds)</text>
+                        
+                        <!-- Y Axis (0 to 1600) -->
+                        <line x1="440" y1="450" x2="730" y2="450" class="s6-grid" />
+                        <text x="430" y="455" class="s6-axis-lbl" text-anchor="end">1600s</text>
+                        
+                        <line x1="440" y1="533" x2="730" y2="533" class="s6-grid" />
+                        <text x="430" y="538" class="s6-axis-lbl" text-anchor="end">1060s</text>
+                        
+                        <line x1="440" y1="616" x2="730" y2="616" class="s6-grid" />
+                        <text x="430" y="621" class="s6-axis-lbl" text-anchor="end">530s</text>
+                        
+                        <line x1="440" y1="700" x2="730" y2="700" class="s6-axis" />
+                        <text x="430" y="705" class="s6-axis-lbl" text-anchor="end">0s</text>
+
+                        <!-- Time Bars -->
+                        <rect x="480" class="s6-bar bar-128 c128-time" />
+                        <text x="505" y="639" class="s6-val val-128" style="fill: var(--neon-green);">330s</text>
+                        <text x="505" y="725" class="s6-axis-lbl" text-anchor="middle">Ctx-128</text>
+
+                        <rect x="560" class="s6-bar bar-base base-time" />
+                        <text x="585" y="576" class="s6-val val-base" style="fill: var(--neon-blue);">730s</text>
+                        <text x="585" y="725" class="s6-axis-lbl" text-anchor="middle">Ctx-256</text>
+
+                        <rect x="640" class="s6-bar bar-512 c512-time" />
+                        <text x="665" y="449" class="s6-val val-512" style="fill: var(--neon-red);">1544s</text>
+                        <text x="665" y="725" class="s6-axis-lbl" text-anchor="middle">Ctx-512</text>
+                    </g>
+
+                </svg>
+            </div>
+
+<!-- Right Pane: Slide Text -->
+            <div class="slide-pane">
+                <h2>Section 6</h2>
+                <h1>Context Length</h1>
+                
+                <!-- Step 0: Baseline -->
+                <div class="step-element" data-step="0">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-blue); margin-right: 10px;">•</span>
+                            <span>Standard baseline operates on a context window of <strong style="color: var(--neon-blue);">256 tokens</strong>.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 1: Reduced Context (128 Tokens) -->
+                <div class="step-element" data-step="1" style="margin-top: 1.5rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span>Reducing context to <strong style="color: var(--neon-green);">128 tokens</strong> cuts training time from 730s to <strong style="color: var(--neon-green);">330s</strong>.</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span>Counterintuitively improves validation loss down to <strong style="color: var(--neon-green);">1.49</strong>.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 2: Increased Context (512 Tokens) -->
+                <div class="step-element" data-step="2" style="margin-top: 1.5rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-red); margin-right: 10px;">•</span>
+                            <span>Doubling context to <strong style="color: var(--neon-red);">512 tokens</strong> slows training to over <strong style="color: var(--neon-red);">1500s</strong>.</span>
+                        </li>
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-red); margin-right: 10px;">•</span>
+                            <span>Validation performance degrades severely to a loss of <strong style="color: var(--neon-red);">2.01</strong>.</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-red); margin-right: 10px;">•</span>
+                            <span><strong>Insight:</strong> Long context windows encourage <strong>overfitting and memorization</strong> at small scales.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- SECTION 7: CAPACITY & GENERALIZATION                    -->
+        <!-- ======================================================= -->
+        <section class="section-block" data-max-steps="2" id="sec-7">
+            <style>
+                /* --- Scoped Animations & Styles for Section 7 --- */
+
+                /* Top Half: Activation Function Visualization */
+                #sec-7 .s7-act-box { fill: rgba(22, 27, 34, 0.5); stroke: var(--neon-blue); stroke-width: 2; rx: 12; transition: all 0.6s ease; }
+                #sec-7 .s7-act-text { fill: var(--text-main); font-family: monospace; font-size: 18px; font-weight: bold; text-anchor: middle; transition: all 0.6s ease; }
+                
+                #sec-7 .s7-curve { fill: none; stroke-linecap: round; stroke-linejoin: round; transition: all 0.6s ease; }
+                
+                /* Default State (Step 0 - GELU) */
+                #sec-7 .s7-curve-gelu { stroke: var(--neon-blue); stroke-width: 4; opacity: 1; }
+                #sec-7 .s7-curve-swiglu { stroke: var(--neon-purple); stroke-width: 2; opacity: 0; transform: scale(0.95); transform-origin: 400px 130px; }
+                #sec-7 .s7-curve-relu { stroke: var(--neon-orange); stroke-width: 2; opacity: 0; transform: scale(0.95); transform-origin: 400px 130px; }
+                
+                #sec-7 .s7-act-text-swiglu { opacity: 0; fill: var(--neon-purple); }
+                #sec-7 .s7-act-text-relu { opacity: 0; fill: var(--neon-orange); }
+
+                /* Step 1: Switch to SwiGLU */
+                #sec-7 .s7-t1.active-step ~ .visual-pane .s7-act-box { stroke: var(--neon-purple); fill: rgba(179, 0, 255, 0.05); }
+                #sec-7 .s7-t1.active-step ~ .visual-pane .s7-curve-gelu { opacity: 0.2; stroke-width: 2; }
+                #sec-7 .s7-t1.active-step ~ .visual-pane .s7-curve-swiglu { opacity: 1; stroke-width: 4; transform: scale(1); }
+                #sec-7 .s7-t1.active-step ~ .visual-pane .s7-act-text-gelu { opacity: 0; }
+                #sec-7 .s7-t1.active-step ~ .visual-pane .s7-act-text-swiglu { opacity: 1; }
+
+                /* Step 2: Switch to ReLU */
+                #sec-7 .s7-t2.active-step ~ .visual-pane .s7-act-box { stroke: var(--neon-orange); fill: rgba(255, 102, 0, 0.05); }
+                #sec-7 .s7-t2.active-step ~ .visual-pane .s7-curve-swiglu { opacity: 0.2; stroke-width: 2; }
+                #sec-7 .s7-t2.active-step ~ .visual-pane .s7-curve-relu { opacity: 1; stroke-width: 4; transform: scale(1); }
+                #sec-7 .s7-t2.active-step ~ .visual-pane .s7-act-text-swiglu { opacity: 0; }
+                #sec-7 .s7-t2.active-step ~ .visual-pane .s7-act-text-relu { opacity: 1; }
+
+                /* Graph Grids & Axes */
+                #sec-7 .s7-grid { stroke: var(--stroke); stroke-width: 1; stroke-dasharray: 4, 4; opacity: 0.5; }
+                #sec-7 .s7-axis { stroke: var(--stroke); stroke-width: 2; }
+                #sec-7 .s7-axis-lbl { fill: var(--text-muted); font-family: monospace; font-size: 13px; }
+                #sec-7 .s7-group-lbl { fill: var(--text-main); font-family: monospace; font-size: 16px; font-weight: bold; text-anchor: middle; }
+
+                /* Metric Badge */
+                #sec-7 .s7-metric-badge { fill: var(--text-muted); font-family: monospace; font-size: 12px; font-weight: bold; }
+
+                /* Data Bars */
+                #sec-7 .s7-bar { width: 35px; rx: 4; y: 700px; height: 0px; transition: y 0.8s cubic-bezier(0.25, 1, 0.5, 1), height 0.8s cubic-bezier(0.25, 1, 0.5, 1); }
+                
+                #sec-7 .bar-base { fill: rgba(0, 243, 255, 0.15); stroke: var(--neon-blue); stroke-width: 2; }
+                #sec-7 .bar-swiglu { fill: rgba(179, 0, 255, 0.15); stroke: var(--neon-purple); stroke-width: 2; opacity: 0; }
+                #sec-7 .bar-relu { fill: rgba(255, 102, 0, 0.15); stroke: var(--neon-orange); stroke-width: 2; opacity: 0; }
+
+                #sec-7 .s7-val { fill: var(--text-main); font-family: monospace; font-size: 14px; font-weight: bold; text-anchor: middle; opacity: 0; transition: opacity 0.5s ease 0.6s; }
+                
+                /* Step 0: Baseline Bars */
+                #sec-7 .base-train { y: 605.5px; height: 94.5px; } /* 0.63 */
+                #sec-7 .base-val { y: 446.5px; height: 253.5px; } /* 1.69 */
+                #sec-7 .val-base { opacity: 1; }
+
+                /* Step 1: SwiGLU Bars Appear */
+                #sec-7 .s7-t1.active-step ~ .visual-pane .bar-swiglu { opacity: 1; }
+                #sec-7 .s7-t1.active-step ~ .visual-pane .swi-train { y: 620.5px; height: 79.5px; } /* 0.53 */
+                #sec-7 .s7-t1.active-step ~ .visual-pane .swi-val { y: 418px; height: 282px; } /* 1.88 */
+                #sec-7 .s7-t1.active-step ~ .visual-pane .val-swi { opacity: 1; }
+
+                /* Step 2: ReLU Bars Appear */
+                #sec-7 .s7-t2.active-step ~ .visual-pane .bar-relu { opacity: 1; }
+                #sec-7 .s7-t2.active-step ~ .visual-pane .relu-train { y: 589px; height: 111px; } /* 0.74 */
+                #sec-7 .s7-t2.active-step ~ .visual-pane .relu-val { y: 460px; height: 240px; } /* 1.60 */
+                #sec-7 .s7-t2.active-step ~ .visual-pane .val-relu { opacity: 1; }
+                
+            </style>
+            
+            <!-- Hidden state triggers -->
+            <div class="step-element s7-t1" data-step="1" style="display:none;"></div>
+            <div class="step-element s7-t2" data-step="2" style="display:none;"></div>
+
+            <!-- Left Pane: Visuals -->
+            <div class="visual-pane">
+                <svg viewBox="0 0 800 800" style="width: 100%; height: 100%; max-height: 85vh;">
+
+                    <!-- ============================================== -->
+                    <!-- TOP HALF: ACTIVATION FUNCTION NODE             -->
+                    <!-- ============================================== -->
+                    <g transform="translate(0, 50)">
+                        <!-- Main Node Box -->
+                        <rect x="300" y="50" width="200" height="150" class="s7-act-box" />
+                        
+                        <!-- Grid inside box -->
+                        <line x1="320" y1="130" x2="480" y2="130" stroke="var(--stroke)" stroke-dasharray="2,2" opacity="0.5" />
+                        <line x1="400" y1="70" x2="400" y2="180" stroke="var(--stroke)" stroke-dasharray="2,2" opacity="0.5" />
+
+                        <!-- Curves -->
+                        <path d="M 320 150 C 350 150, 370 180, 400 130 C 430 80, 450 80, 480 80" class="s7-curve s7-curve-gelu" />
+                        <path d="M 320 160 C 340 160, 360 190, 380 140 C 400 90, 420 50, 480 50" class="s7-curve s7-curve-swiglu" />
+                        <path d="M 320 130 L 400 130 L 480 50" class="s7-curve s7-curve-relu" />
+
+                        <!-- Labels -->
+                        <text x="400" y="230" class="s7-act-text s7-act-text-gelu">Standard GELU</text>
+                        <text x="400" y="230" class="s7-act-text s7-act-text-swiglu">Complex SwiGLU</text>
+                        <text x="400" y="230" class="s7-act-text s7-act-text-relu">Simple ReLU</text>
+                    </g>
+
+
+                    <!-- ============================================== -->
+                    <!-- BOTTOM HALF: BIAS-VARIANCE GRAPH               -->
+                    <!-- ============================================== -->
+                    <g transform="translate(0, 50)">
+                        
+                        <text x="400" y="300" class="s7-group-lbl" style="font-size: 20px;">Performance Impact</text>
+
+                        <!-- Legend -->
+                        <rect x="230" y="325" width="12" height="12" rx="2" class="bar-base" />
+                        <text x="250" y="335" class="s7-axis-lbl">GELU</text>
+                        
+                        <rect x="330" y="325" width="12" height="12" rx="2" fill="rgba(179, 0, 255, 0.15)" stroke="var(--neon-purple)" stroke-width="2" />
+                        <text x="350" y="335" class="s7-axis-lbl">SwiGLU</text>
+
+                        <rect x="430" y="325" width="12" height="12" rx="2" fill="rgba(255, 102, 0, 0.15)" stroke="var(--neon-orange)" stroke-width="2" />
+                        <text x="450" y="335" class="s7-axis-lbl">ReLU</text>
+
+                        <!-- "Lower is Better" Badge -->
+                        <rect x="120" y="360" width="135" height="24" rx="4" fill="rgba(255,255,255,0.03)" stroke="var(--stroke)"/>
+                        <text x="128" y="376" class="s7-metric-badge">↓ Lower is Better</text>
+
+                        <!-- Y Axis (0.0 to 2.0. Scale: 1 unit = 150px) -->
+                        <line x1="120" y1="400" x2="680" y2="400" class="s7-grid" />
+                        <text x="110" y="405" class="s7-axis-lbl" text-anchor="end">2.0</text>
+                        
+                        <line x1="120" y1="475" x2="680" y2="475" class="s7-grid" />
+                        <text x="110" y="480" class="s7-axis-lbl" text-anchor="end">1.5</text>
+                        
+                        <line x1="120" y1="550" x2="680" y2="550" class="s7-grid" />
+                        <text x="110" y="555" class="s7-axis-lbl" text-anchor="end">1.0</text>
+                        
+                        <line x1="120" y1="625" x2="680" y2="625" class="s7-grid" />
+                        <text x="110" y="630" class="s7-axis-lbl" text-anchor="end">0.5</text>
+
+                        <line x1="120" y1="700" x2="680" y2="700" class="s7-axis" />
+                        <text x="110" y="705" class="s7-axis-lbl" text-anchor="end" style="fill: var(--text-main);">0.0</text>
+
+                        <!-- ============================================== -->
+                        <!-- GROUP 1: TRAINING LOSS                         -->
+                        <!-- ============================================== -->
+                        <text x="250" y="730" class="s7-group-lbl">Training Loss</text>
+                        
+                        <!-- GELU Train -->
+                        <rect x="185" class="s7-bar bar-base base-train" />
+                        <text x="202.5" y="595" class="s7-val val-base" style="fill: var(--neon-blue);">0.63</text>
+                        
+                        <!-- SwiGLU Train -->
+                        <rect x="230" class="s7-bar bar-swiglu swi-train" />
+                        <text x="247.5" y="610" class="s7-val val-swi" style="fill: var(--neon-purple);">0.53</text>
+
+                        <!-- ReLU Train -->
+                        <rect x="275" class="s7-bar bar-relu relu-train" />
+                        <text x="292.5" y="579" class="s7-val val-relu" style="fill: var(--neon-orange);">0.74</text>
+
+
+                        <!-- ============================================== -->
+                        <!-- GROUP 2: VALIDATION LOSS                       -->
+                        <!-- ============================================== -->
+                        <text x="530" y="730" class="s7-group-lbl">Validation Loss</text>
+
+                        <!-- GELU Val -->
+                        <rect x="465" class="s7-bar bar-base base-val" />
+                        <text x="482.5" y="436" class="s7-val val-base" style="fill: var(--neon-blue);">1.69</text>
+                        
+                        <!-- SwiGLU Val -->
+                        <rect x="510" class="s7-bar bar-swiglu swi-val" />
+                        <text x="527.5" y="408" class="s7-val val-swi" style="fill: var(--neon-purple);">1.88</text>
+
+                        <!-- ReLU Val -->
+                        <rect x="555" class="s7-bar bar-relu relu-val" />
+                        <text x="572.5" y="450" class="s7-val val-relu" style="fill: var(--neon-orange);">1.60</text>
+
+                    </g>
+                </svg>
+            </div>
+
+<!-- Right Pane: Slide Text -->
+            <div class="slide-pane">
+                <h2>Section 7</h2>
+                <h1>Capacity & Generalization</h1>
+                
+                <!-- Step 0: Baseline GELU -->
+                <div class="step-element" data-step="0">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-blue); margin-right: 10px;">•</span>
+                            <span>Baseline model uses standard <strong style="color: var(--neon-blue);">GELU</strong> activations.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 1: SwiGLU Capacity Trade-off -->
+                <div class="step-element" data-step="1" style="margin-top: 1.5rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-purple); margin-right: 10px;">•</span>
+                            <span>Highly expressive <strong style="color: var(--neon-purple);">SwiGLU</strong> drops training loss to <strong style="color: var(--neon-purple);">0.53</strong>.</span>
+                        </li>
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-purple); margin-right: 10px;">•</span>
+                            <span>However, validation loss worsens significantly to <strong style="color: var(--neon-purple);">1.88</strong>.</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-purple); margin-right: 10px;">•</span>
+                            <span><strong>Insight:</strong> Adding capacity in low-data regimes increases <strong>overfitting</strong>.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 2: ReLU Constrained Generalization -->
+                <div class="step-element" data-step="2" style="margin-top: 1.5rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-orange); margin-right: 10px;">•</span>
+                            <span>Simpler <strong style="color: var(--neon-orange);">ReLU</strong> activation improves validation loss to <strong style="color: var(--neon-orange);">1.60</strong>.</span>
+                        </li>
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-orange); margin-right: 10px;">•</span>
+                            <span>Achieves superior generalization despite fitting the training data less closely.</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-orange); margin-right: 10px;">•</span>
+                            <span><strong>Insight:</strong> Simple functions with strong constraints generalize better at small scales.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- SECTION 8: POSITIONAL ENCODING                          -->
+        <!-- ======================================================= -->
+        <section class="section-block" data-max-steps="2" id="sec-8">
+            <style>
+                /* --- Scoped Animations & Styles for Section 8 --- */
+
+                /* Top Half: Architecture Visualization */
+                #sec-8 .s8-block { fill: rgba(22, 27, 34, 0.8); stroke: var(--stroke); stroke-width: 2; rx: 8; transition: all 0.5s ease; }
+                #sec-8 .s8-text { font-family: monospace; font-size: 16px; font-weight: bold; text-anchor: middle; transition: all 0.5s ease; }
+                #sec-8 .s8-lbl { fill: var(--text-muted); font-family: monospace; font-size: 12px; text-anchor: middle; }
+                
+                #sec-8 .s8-flow { fill: none; stroke: var(--neon-blue); stroke-width: 3; stroke-dasharray: 8, 8; animation: s8FlowAnim 1s linear infinite; }
+                @keyframes s8FlowAnim { to { stroke-dashoffset: -16; } }
+
+                /* Smooth Crossfade Logic for PE Blocks */
+                #sec-8 .pe-wrapper { transition: opacity 0.5s ease; }
+                #sec-8 .s8-plus-sign { fill: var(--text-main); transition: opacity 0.5s ease; }
+                
+                #sec-8 .pe-content-base { opacity: 1; transition: opacity 0.5s ease; }
+                #sec-8 .pe-content-adv { opacity: 0; transition: opacity 0.5s ease; }
+                #sec-8 .pe-content-none { opacity: 0; transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.25, 1, 0.5, 1); transform: translateY(-10px); }
+
+                /* Step 1: RoPE and ALiBi Reveal */
+                #sec-8 .s8-t1.active-step ~ .visual-pane .pe-content-base { opacity: 0; }
+                #sec-8 .s8-t1.active-step ~ .visual-pane .pe-content-adv { opacity: 1; }
+
+                /* Step 2: Everything Disabled, Masking Badge Appears */
+                #sec-8 .s8-t2.active-step ~ .visual-pane .pe-content-adv { opacity: 0; }
+                #sec-8 .s8-t2.active-step ~ .visual-pane .pe-wrapper { opacity: 0.2; filter: grayscale(100%); }
+                #sec-8 .s8-t2.active-step ~ .visual-pane .s8-plus-sign { opacity: 0; }
+                #sec-8 .s8-t2.active-step ~ .visual-pane .pe-content-none { opacity: 1; transform: translateY(0); }
+
+                /* Graph Grid and Axes */
+                #sec-8 .s8-grid { stroke: var(--stroke); stroke-width: 1; stroke-dasharray: 4, 4; opacity: 0.5; }
+                #sec-8 .s8-axis { stroke: var(--stroke); stroke-width: 2; }
+
+                /* Data Bars */
+                #sec-8 .s8-bar { width: 50px; rx: 4; y: 650px; height: 0px; transition: y 0.8s cubic-bezier(0.25, 1, 0.5, 1), height 0.8s cubic-bezier(0.25, 1, 0.5, 1); }
+                
+                #sec-8 .bar-none { fill: rgba(0, 255, 102, 0.15); stroke: var(--neon-green); stroke-width: 2; opacity: 0; }
+                #sec-8 .bar-base { fill: rgba(0, 243, 255, 0.15); stroke: var(--neon-blue); stroke-width: 2; }
+                #sec-8 .bar-rope { fill: rgba(255, 204, 0, 0.15); stroke: var(--neon-yellow); stroke-width: 2; opacity: 0; }
+                #sec-8 .bar-alibi { fill: rgba(255, 51, 102, 0.15); stroke: var(--neon-red); stroke-width: 2; opacity: 0; }
+
+                /* Data Values */
+                #sec-8 .s8-val { fill: var(--text-main); font-family: monospace; font-size: 16px; font-weight: bold; text-anchor: middle; opacity: 0; transition: opacity 0.5s ease 0.6s; }
+
+                /* Graph Coordinate Math: Y=650 is 1.0, Y=350 is 2.0. (Multiplier: 300px per 1.0 unit) */
+                
+                /* Step 0: Baseline (1.69) -> 0.69 * 300 = 207px */
+                #sec-8 .base-loss { y: 443px; height: 207px; } 
+                #sec-8 .val-base { opacity: 1; }
+
+                /* Step 1: Advanced PE (RoPE: 1.74, ALiBi: 1.81) */
+                #sec-8 .s8-t1.active-step ~ .visual-pane .bar-rope { opacity: 1; y: 428px; height: 222px; }
+                #sec-8 .s8-t1.active-step ~ .visual-pane .bar-alibi { opacity: 1; y: 407px; height: 243px; }
+                #sec-8 .s8-t1.active-step ~ .visual-pane .val-adv { opacity: 1; }
+
+                /* Step 2: No PE (1.57) */
+                #sec-8 .s8-t2.active-step ~ .visual-pane .bar-none { opacity: 1; y: 479px; height: 171px; }
+                #sec-8 .s8-t2.active-step ~ .visual-pane .val-none { opacity: 1; }
+                
+            </style>
+            
+            <!-- Hidden state triggers -->
+            <div class="step-element s8-t1" data-step="1" style="display:none;"></div>
+            <div class="step-element s8-t2" data-step="2" style="display:none;"></div>
+
+            <!-- Left Pane: Visuals -->
+            <div class="visual-pane">
+                <svg viewBox="0 0 800 800" style="width: 100%; height: 100%; max-height: 85vh;">
+                    
+                    <!-- ============================================== -->
+                    <!-- TOP HALF: POSITIONAL ENCODING MECHANISM        -->
+                    <!-- ============================================== -->
+                    <g transform="translate(0, 30)">
+                        
+                        <!-- Token Embedding (Constant) -->
+                        <rect x="180" y="80" width="160" height="60" class="s8-block" />
+                        <text x="260" y="115" class="s8-text" style="fill: var(--text-main);">Token Embedding</text>
+                        
+                        <!-- Plus Sign (Fades out seamlessly in Step 2) -->
+                        <text x="390" y="118" class="s8-text s8-plus-sign" style="font-size: 24px;">+</text>
+
+                        <!-- The Positional Encoding Slot -->
+                        <g class="pe-wrapper">
+                            
+                            <!-- STEP 0: Baseline (Blue) -->
+                            <g class="pe-content-base">
+                                <rect x="440" y="80" width="180" height="60" class="s8-block" style="stroke: var(--neon-blue); fill: rgba(0, 243, 255, 0.05);" />
+                                <text x="530" y="115" class="s8-text" style="fill: var(--neon-blue);">Learned Pos</text>
+                            </g>
+
+                            <!-- STEP 1: Advanced PEs (RoPE + ALiBi Split Box) -->
+                            <g class="pe-content-adv">
+                                <rect x="440" y="80" width="180" height="60" class="s8-block" style="stroke: var(--stroke); fill: var(--panel-color);" />
+                                
+                                <!-- RoPE (Yellow) -->
+                                <rect x="445" y="85" width="82" height="50" rx="4" fill="rgba(255, 204, 0, 0.1)" stroke="var(--neon-yellow)" />
+                                <path d="M 466 100 Q 476 90, 486 100 T 506 100" fill="none" stroke="var(--neon-yellow)" stroke-width="2"/>
+                                <text x="486" y="122" fill="var(--neon-yellow)" font-family="monospace" font-size="12" font-weight="bold" text-anchor="middle">RoPE</text>
+
+                                <!-- ALiBi (Red) -->
+                                <rect x="533" y="85" width="82" height="50" rx="4" fill="rgba(255, 51, 102, 0.1)" stroke="var(--neon-red)" />
+                                <path d="M 560 92 L 588 108" fill="none" stroke="var(--neon-red)" stroke-width="2"/>
+                                <text x="574" y="122" fill="var(--neon-red)" font-family="monospace" font-size="12" font-weight="bold" text-anchor="middle">ALiBi</text>
+                            </g>
+                        </g>
+
+                        <!-- STEP 2: The Override Badge (Appears over the dimmed wrapper) -->
+                        <g class="pe-content-none">
+                            <rect x="440" y="80" width="180" height="60" rx="8" fill="rgba(0, 255, 102, 0.1)" stroke="var(--neon-green)" stroke-dasharray="6,4" stroke-width="2" />
+                            <text x="530" y="115" class="s8-text" style="fill: var(--neon-green);">Masking Only</text>
+                        </g>
+
+                        <!-- Downward Flow -->
+                        <path d="M 400 140 L 400 200" class="s8-flow" />
+                        
+                        <!-- Output Box -->
+                        <rect x="300" y="200" width="200" height="50" class="s8-block" style="stroke: var(--neon-purple);" />
+                        <text x="400" y="230" class="s8-text" style="fill: var(--text-main);">Transformer Blocks</text>
+
+                    </g>
+
+
+                    <!-- ============================================== -->
+                    <!-- BOTTOM HALF: DATA GRAPH                        -->
+                    <!-- ============================================== -->
+                    <g transform="translate(0, 30)">
+                        
+                        <text x="400" y="300" class="s8-text" style="font-size: 20px; fill: var(--text-main);">Validation Loss by PE Strategy</text>
+
+                        <!-- Y Axis (1.0 to 2.0. Scale: 1 unit = 300px) -->
+                        <line x1="120" y1="350" x2="680" y2="350" class="s8-grid" />
+                        <text x="110" y="355" class="s8-lbl" text-anchor="end">2.0</text>
+                        
+                        <line x1="120" y1="425" x2="680" y2="425" class="s8-grid" />
+                        <text x="110" y="430" class="s8-lbl" text-anchor="end">1.75</text>
+                        
+                        <line x1="120" y1="500" x2="680" y2="500" class="s8-grid" />
+                        <text x="110" y="505" class="s8-lbl" text-anchor="end">1.5</text>
+                        
+                        <line x1="120" y1="575" x2="680" y2="575" class="s8-grid" />
+                        <text x="110" y="580" class="s8-lbl" text-anchor="end">1.25</text>
+                        
+                        <line x1="120" y1="650" x2="680" y2="650" class="s8-axis" />
+                        <text x="110" y="655" class="s8-lbl" text-anchor="end" style="fill: var(--text-main);">1.0</text>
+
+
+                        <!-- ============================================== -->
+                        <!-- GRAPH BARS                                     -->
+                        <!-- ============================================== -->
+
+                        <!-- Bar 1: No PE (Green) -->
+                        <rect x="170" class="s8-bar bar-none" />
+                        <text x="195" y="469" class="s8-val val-none" style="fill: var(--neon-green);">1.57</text>
+                        <text x="195" y="680" class="s8-lbl">No PE</text>
+                        <text x="195" y="700" class="s8-lbl" style="font-size: 10px; opacity: 0.5;">(Masking Only)</text>
+
+                        <!-- Bar 2: Baseline (Blue) -->
+                        <rect x="310" class="s8-bar bar-base base-loss" />
+                        <text x="335" y="433" class="s8-val val-base" style="fill: var(--neon-blue);">1.69</text>
+                        <text x="335" y="680" class="s8-lbl">Learned</text>
+                        <text x="335" y="700" class="s8-lbl" style="font-size: 10px; opacity: 0.5;">(Baseline)</text>
+
+                        <!-- Bar 3: RoPE (Yellow) -->
+                        <rect x="450" class="s8-bar bar-rope" />
+                        <text x="475" y="418" class="s8-val val-adv" style="fill: var(--neon-yellow);">1.74</text>
+                        <text x="475" y="680" class="s8-lbl">RoPE</text>
+
+                        <!-- Bar 4: ALiBi (Red) -->
+                        <rect x="590" class="s8-bar bar-alibi" />
+                        <text x="615" y="397" class="s8-val val-adv" style="fill: var(--neon-red);">1.81</text>
+                        <text x="615" y="680" class="s8-lbl">ALiBi</text>
+
+                    </g>
+                </svg>
+            </div>
+
+            <!-- Right Pane: Slide Text -->
+            <div class="slide-pane">
+                <h2>Section 8</h2>
+                <h1>Positional Encoding</h1>
+                
+                <!-- Step 0: Baseline Learned Embedding -->
+                <div class="step-element" data-step="0">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-blue); margin-right: 10px;">•</span>
+                            <span>Baseline utilizes standard <strong style="color: var(--neon-blue);">Learned Position Embeddings</strong>.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 1: Advanced Methods Degradation -->
+                <div class="step-element" data-step="1" style="margin-top: 1.5rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-yellow); margin-right: 10px;">•</span>
+                            <span>We swapped embeddings for advanced methods: <strong style="color: var(--neon-yellow);">RoPE</strong> and <strong style="color: var(--neon-red);">ALiBi</strong>.</span>
+                        </li>
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--text-muted); margin-right: 10px;">•</span>
+                            <span>Both performed worse than baseline, rising to <strong style="color: var(--neon-yellow);">1.74</strong> (RoPE) and <strong style="color: var(--neon-red);">1.81</strong> (ALiBi).</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 2: No PE Outperformance -->
+                <div class="step-element" data-step="2" style="margin-top: 1.5rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span><strong style="color: var(--neon-green);">Removing Positional Encoding entirely</strong> achieved the best validation loss of <strong style="color: var(--neon-green);">1.57</strong>.</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span><strong>Insight:</strong> Causal masking and local datasets provide enough implicit position data.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- SECTION 9: TRANSITION TO KEY RESULT                     -->
+        <!-- ======================================================= -->
+        <section class="section-block" data-max-steps="1" id="sec-9">
+            <style>
+                /* --- Scoped Animations & Styles for Section 9 --- */
+
+                #sec-9 .s9-node { fill: rgba(22, 27, 34, 0.8); stroke: var(--stroke); stroke-width: 2; rx: 6; }
+                #sec-9 .s9-txt { fill: var(--text-muted); font-family: monospace; font-size: 14px; text-anchor: middle; }
+                #sec-9 .s9-txt-glow { fill: var(--neon-green); font-family: monospace; font-size: 28px; font-weight: bold; text-anchor: middle; text-shadow: 0 0 15px rgba(0,255,102,0.4); opacity: 0; }
+                
+                #sec-9 .s9-math { fill: rgba(255,255,255,0.4); font-family: monospace; font-size: 13px; }
+
+                #sec-9 .s9-flow { fill: none; stroke: var(--neon-green); stroke-width: 3; stroke-dasharray: 8, 8; animation: s9FlowAnim 1s linear infinite; }
+                @keyframes s9FlowAnim { to { stroke-dashoffset: -16; } }
+
+                /* --- Fast Reveal Animation Sequence --- */
+
+                /* 1. FP32 Box starts in the center, slides up */
+                #sec-9 .s9-fp32-group { transform: translateY(110px); transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
+                #sec-9 .s9-t1.active-step ~ .visual-pane .s9-fp32-group { transform: translateY(0); }
+
+                /* 2. Flow Line shoots down */
+                #sec-9 .s9-flow-wrapper { opacity: 0; clip-path: inset(0 0 100% 0); transition: clip-path 0.3s ease 0.2s, opacity 0.1s ease 0.2s; }
+                #sec-9 .s9-t1.active-step ~ .visual-pane .s9-flow-wrapper { opacity: 1; clip-path: inset(0 0 0 0); }
+
+                /* 3. Estimator Box snaps in */
+                #sec-9 .s9-ste-group { transform-origin: 400px 395px; transform: scale(0); opacity: 0; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.35s; }
+                #sec-9 .s9-t1.active-step ~ .visual-pane .s9-ste-group { transform: scale(1); opacity: 1; }
+
+                /* 4. Ternary Box drops and expands */
+                #sec-9 .s9-ternary-group { transform-origin: 400px 520px; transform: scale(0.9) translateY(-30px); opacity: 0; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.45s; }
+                #sec-9 .s9-t1.active-step ~ .visual-pane .s9-ternary-group { transform: scale(1) translateY(0); opacity: 1; }
+
+                /* 5. Glowing {-1, 0, 1} pops in last */
+                #sec-9 .s9-t1.active-step ~ .visual-pane .s9-txt-glow { animation: s9Pop 0.4s ease forwards 0.7s; }
+                @keyframes s9Pop { 0% { opacity: 0; transform: scale(0.5); } 100% { opacity: 1; transform: scale(1); } }
+
+            </style>
+            
+            <!-- Hidden state triggers -->
+            <div class="step-element s9-t1" data-step="1" style="display:none;"></div>
+
+            <!-- Left Pane: Visuals -->
+            <div class="visual-pane">
+                <svg viewBox="0 0 800 800" style="width: 100%; height: 100%; max-height: 85vh;">
+                    
+                    <!-- Base NanoGPT Shell -->
+                    <rect x="250" y="150" width="300" height="500" class="s9-node" style="stroke: var(--neon-blue); fill: rgba(0, 243, 255, 0.05);" />
+                    <text x="400" y="190" class="s9-txt" style="fill: var(--neon-blue); font-weight: bold; font-size: 20px;">NanoGPT Base</text>
+
+                    <!-- The Continuous Weights Matrix (Starts centered, slides up) -->
+                    <g class="s9-fp32-group">
+                        <rect x="290" y="240" width="220" height="100" class="s9-node" style="stroke: var(--text-muted);" />
+                        <text x="400" y="260" class="s9-txt" style="font-size: 12px; opacity: 0.7;">Continuous Weights (FP32)</text>
+                        
+                        <!-- Math Numbers (Right-aligned) -->
+                        <g class="s9-math" text-anchor="end">
+                            <text x="345" y="295"> 0.84</text>
+                            <text x="395" y="295">-0.21</text>
+                            <text x="445" y="295"> 0.04</text>
+                            <text x="495" y="295">-1.93</text>
+                            
+                            <text x="345" y="320">-0.01</text>
+                            <text x="395" y="320"> 1.45</text>
+                            <text x="445" y="320">-0.77</text>
+                            <text x="495" y="320"> 0.33</text>
+                        </g>
+                    </g>
+
+                    <!-- Quantization Arrow & Filter (Shoots down) -->
+                    <!-- Rendered BEFORE the box so the line goes behind it -->
+                    <g class="s9-flow-wrapper">
+                        <path d="M 400 340 L 400 450" class="s9-flow" />
+                    </g>
+                    
+                    <!-- Straight-Through Estimator (Snaps in) -->
+                    <g class="s9-ste-group">
+                        <rect x="290" y="380" width="220" height="30" rx="15" style="fill: var(--bg-color); stroke: var(--neon-green); stroke-width: 2;"/>
+                        <text x="400" y="400" class="s9-txt" style="fill: var(--neon-green); font-weight: bold; font-size: 13px;">Straight-Through Estimator</text>
+                    </g>
+
+                    <!-- The Ternary Matrix (Drops and expands) -->
+                    <g class="s9-ternary-group">
+                        <rect x="290" y="450" width="220" height="140" class="s9-node" style="stroke: var(--neon-green); box-shadow: 0 0 20px rgba(0,255,102,0.5);" />
+                        <text x="400" y="480" class="s9-txt" style="fill: var(--neon-green); font-size: 16px; font-weight: bold;">Ternary Constraint</text>
+                        
+                        <!-- Giant {-1, 0, 1} (Pops in last) -->
+                        <text x="400" y="540" class="s9-txt-glow" transform-origin="400px 530px">{ -1,  0,  1 }</text>
+                    </g>
+
+                </svg>
+            </div>
+
+<!-- Right Pane: Slide Text -->
+            <div class="slide-pane">
+                <h2>Section 9</h2>
+                <h1>Transition to Key Result</h1>
+                
+                <!-- Step 0: Trade-offs Summary -->
+                <div class="step-element" data-step="0">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--text-muted); margin-right: 10px;">•</span>
+                            <span>Most architectural modifications revealed clear tradeoffs between validation accuracy and speed.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 1: Ternary Setup Intro -->
+                <div class="step-element" data-step="1" style="margin-top: 1.2rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span>The most robust improvement came from a severe capacity constraint: <strong style="color: var(--neon-green);">Ternary Weight Quantization</strong>.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- SECTION 10: TERNARY QUANTIZATION                        -->
+        <!-- ======================================================= -->
+        <section class="section-block" data-max-steps="1" id="sec-10">
+            <style>
+                /* --- Scoped Animations & Styles for Section 10 --- */
+
+                /* Neural Network Visualization */
+                #sec-10 .s10-node { fill: var(--bg-color); stroke: var(--text-main); stroke-width: 3; transition: all 0.5s ease; }
+                
+                #sec-10 .s10-edge-1 { fill: none; stroke: var(--neon-green); stroke-width: 3; stroke-linecap: round; filter: drop-shadow(0 0 5px rgba(0,255,102,0.5)); animation: s10PulseGreen 2s infinite alternate; }
+                #sec-10 .s10-edge-neg1 { fill: none; stroke: var(--neon-red); stroke-width: 3; stroke-linecap: round; filter: drop-shadow(0 0 5px rgba(255,51,102,0.5)); animation: s10PulseRed 2s infinite alternate; }
+                #sec-10 .s10-edge-0 { fill: none; stroke: var(--stroke); stroke-width: 1.5; stroke-dasharray: 6, 6; opacity: 0.4; }
+
+                @keyframes s10PulseGreen { from { stroke-width: 2; opacity: 0.7; } to { stroke-width: 4; opacity: 1; } }
+                @keyframes s10PulseRed { from { stroke-width: 2; opacity: 0.7; } to { stroke-width: 4; opacity: 1; } }
+
+                #sec-10 .s10-lbl-1 { fill: var(--text-main); font-family: monospace; font-size: 14px; font-weight: bold; background: var(--bg-color); }
+                #sec-10 .s10-badge { fill: var(--panel-color); stroke: var(--stroke); stroke-width: 1; rx: 4; }
+
+                /* Dashboard Container (Appears on Step 1) */
+                #sec-10 .s10-dashboard { opacity: 0; transform: translateY(40px); transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1); }
+                #sec-10 .s10-t1.active-step ~ .visual-pane .s10-dashboard { opacity: 1; transform: translateY(0); }
+
+                /* Dashboard HTML Cards */
+                #sec-10 .s10-card-container { display: flex; gap: 20px; justify-content: center; width: 100%; padding: 0 40px; }
+                #sec-10 .s10-stat-card {
+                    flex: 1; background: rgba(22, 27, 34, 0.8); border: 1px solid var(--stroke);
+                    border-radius: 12px; padding: 20px; text-align: center;
+                    backdrop-filter: blur(10px); position: relative; overflow: hidden;
+                }
+                
+                /* Glowing active card */
+                #sec-10 .s10-stat-card.ternary-card { border-color: var(--neon-green); box-shadow: 0 10px 30px rgba(0, 255, 102, 0.15); }
+                #sec-10 .s10-stat-card.ternary-card::before {
+                    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px;
+                    background: var(--neon-green); box-shadow: 0 0 10px var(--neon-green);
+                }
+
+                #sec-10 .s10-stat-title { font-size: 1rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px; }
+                #sec-10 .s10-stat-val { font-size: 4rem; font-family: monospace; font-weight: bold; line-height: 1; margin-bottom: 10px; }
+                #sec-10 .s10-stat-sub { font-size: 0.9rem; color: var(--text-muted); font-family: monospace; background: rgba(255,255,255,0.05); padding: 5px 10px; border-radius: 4px; display: inline-block; }
+                
+            </style>
+            
+            <!-- Hidden state triggers -->
+            <div class="step-element s10-t1" data-step="1" style="display:none;"></div>
+
+            <!-- Left Pane: Visuals -->
+            <div class="visual-pane" style="justify-content: flex-start; padding-top: 40px;">
+                
+                <!-- TOP HALF: TERNARY NEURAL NETWORK VISUAL -->
+                <svg viewBox="0 0 800 450" style="width: 100%; height: 50%;">
+                    
+                    <text x="400" y="30" fill="var(--text-main)" font-family="sans-serif" font-size="20" font-weight="bold" text-anchor="middle">Ternary Weight Matrix Map</text>
+
+                    <g transform="translate(0, 60)">
+                        <!-- EDGES -->
+                        <!-- From Input 1 (y=100) -->
+                        <path d="M 200 100 L 600 50" class="s10-edge-1" />   <!-- +1 -->
+                        <path d="M 200 100 L 600 150" class="s10-edge-0" />  <!-- 0 -->
+                        <path d="M 200 100 L 600 250" class="s10-edge-neg1" /><!-- -1 -->
+                        
+                        <!-- From Input 2 (y=200) -->
+                        <path d="M 200 200 L 600 50" class="s10-edge-neg1" /> <!-- -1 -->
+                        <path d="M 200 200 L 600 150" class="s10-edge-1" />   <!-- +1 -->
+                        <path d="M 200 200 L 600 250" class="s10-edge-0" />   <!-- 0 -->
+
+                        <!-- From Input 3 (y=300) -->
+                        <path d="M 200 300 L 600 50" class="s10-edge-0" />   <!-- 0 -->
+                        <path d="M 200 300 L 600 150" class="s10-edge-neg1" /><!-- -1 -->
+                        <path d="M 200 300 L 600 250" class="s10-edge-1" />   <!-- +1 -->
+
+                        <!-- LABELS ON EDGES -->
+                        <!-- Input 1 labels -->
+                        <rect x="385" y="60" width="30" height="20" class="s10-badge" />
+                        <text x="400" y="74" class="s10-lbl-1" style="fill: var(--neon-green);">+1</text>
+                        
+                        <rect x="385" y="112" width="30" height="20" class="s10-badge" />
+                        <text x="400" y="126" class="s10-lbl-1" style="fill: var(--text-muted);">0</text>
+                        
+                        <rect x="385" y="162" width="30" height="20" class="s10-badge" />
+                        <text x="400" y="176" class="s10-lbl-1" style="fill: var(--neon-red);">-1</text>
+
+                        <!-- Input 2 labels -->
+                        <rect x="385" y="210" width="30" height="20" class="s10-badge" />
+                        <text x="400" y="224" class="s10-lbl-1" style="fill: var(--text-muted);">0</text>
+                        
+                        <!-- Input 3 labels -->
+                        <rect x="385" y="260" width="30" height="20" class="s10-badge" />
+                        <text x="400" y="274" class="s10-lbl-1" style="fill: var(--neon-green);">+1</text>
+
+                        <!-- NODES -->
+                        <!-- Input Nodes -->
+                        <circle cx="200" cy="100" r="15" class="s10-node" />
+                        <circle cx="200" cy="200" r="15" class="s10-node" />
+                        <circle cx="200" cy="300" r="15" class="s10-node" />
+                        
+                        <!-- Output Nodes -->
+                        <circle cx="600" cy="50" r="15" class="s10-node" />
+                        <circle cx="600" cy="150" r="15" class="s10-node" />
+                        <circle cx="600" cy="250" r="15" class="s10-node" />
+                    </g>
+                </svg>
+
+                <!-- BOTTOM HALF: DATA DASHBOARD (HTML inside the Flex Column) -->
+                <div class="s10-dashboard" style="width: 100%; height: 50%; display: flex; align-items: center;">
+                    <div class="s10-card-container">
+                        
+                        <!-- Baseline Card -->
+                        <div class="s10-stat-card">
+                            <div class="s10-stat-title">Standard FP32</div>
+                            <div class="s10-stat-val" style="color: var(--neon-blue);">1.69</div>
+                            <div style="margin-bottom: 10px; color: var(--text-main); font-weight: bold;">Validation Loss</div>
+                            <div class="s10-stat-sub">Variance: ±0.007</div>
+                        </div>
+
+                        <!-- Ternary Card -->
+                        <div class="s10-stat-card ternary-card">
+                            <div class="s10-stat-title" style="color: var(--neon-green); font-weight: bold;">Ternary {-1, 0, 1}</div>
+                            <div class="s10-stat-val" style="color: var(--neon-green); text-shadow: 0 0 20px rgba(0,255,102,0.4);">1.47</div>
+                            <div style="margin-bottom: 10px; color: var(--text-main); font-weight: bold;">Validation Loss</div>
+                            <div class="s10-stat-sub">Variance: ±0.005 (Most Stable)</div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+<!-- Right Pane: Slide Text -->
+            <div class="slide-pane">
+                <h2>Section 10</h2>
+                <h1>Ternary Quantization</h1>
+                
+                <!-- Step 0: The Ternary Constraint -->
+                <div class="step-element" data-step="0">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-blue); margin-right: 10px;">•</span>
+                            <span>Weights are strictly constrained to just three values: <strong style="color: var(--neon-red);">-1</strong>, <strong style="color: var(--text-muted);">0</strong>, and <strong style="color: var(--neon-green);">1</strong>.</span>
+                        </li>
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--text-muted); margin-right: 10px;">•</span>
+                            <span>Implemented via a <strong>Straight-Through Estimator (STE)</strong> during the backward pass.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 1: Outstanding Results & Stability -->
+                <div class="step-element" data-step="1" style="margin-top: 1.5rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span>Achieved the <strong>best validation loss</strong> in the entire study at <strong style="color: var(--neon-green);">1.47</strong>.</span>
+                        </li>
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span>Extremely consistent across seeds, with an ultra-low variance of <strong style="color: var(--neon-green);">±0.005</strong>.</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span><strong>Insight:</strong> Severe weight restrictions act as a powerful form of <strong>implicit regularization</strong>.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- SECTION 11: EFFICIENCY TRADE-OFF                        -->
+        <!-- ======================================================= -->
+        <section class="section-block" data-max-steps="1" id="sec-11">
+            <style>
+                /* --- Scoped Animations & Styles for Section 11 --- */
+
+                /* Graph Grid and Axes */
+                #sec-11 .s11-grid { stroke: var(--stroke); stroke-width: 1; stroke-dasharray: 4, 4; opacity: 0.5; }
+                #sec-11 .s11-axis { stroke: var(--stroke); stroke-width: 2; }
+                #sec-11 .s11-axis-lbl { fill: var(--text-muted); font-family: monospace; font-size: 13px; }
+                #sec-11 .s11-title { fill: var(--text-main); font-family: -apple-system, sans-serif; font-size: 20px; font-weight: bold; }
+                
+                /* Axis Labels */
+                #sec-11 .s11-label-x { fill: var(--text-main); font-family: monospace; font-size: 14px; text-anchor: middle; letter-spacing: 1px; }
+                #sec-11 .s11-label-y { fill: var(--text-main); font-family: monospace; font-size: 14px; text-anchor: middle; letter-spacing: 1px; transform: rotate(-90deg); transform-origin: 50px 400px; }
+
+                /* Scatter Plot Points */
+                #sec-11 .s11-dot { fill: var(--stroke); transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); }
+                #sec-11 .s11-dot:hover { fill: var(--text-muted); r: 8; cursor: pointer; }
+                
+                /* Highlighted Points */
+                #sec-11 .dot-base { fill: var(--neon-blue); filter: drop-shadow(0 0 8px rgba(0,243,255,0.6)); }
+                
+                /* Pareto Highlight Animation (Step 1) */
+                #sec-11 .dot-opt { fill: var(--stroke); transition: all 0.8s ease; }
+                #sec-11 .lbl-opt { opacity: 0; fill: var(--neon-green); font-family: monospace; font-size: 14px; font-weight: bold; transition: opacity 0.8s ease; }
+                
+                #sec-11 .s11-t1.active-step ~ .visual-pane .dot-opt { fill: var(--neon-green); r: 10; filter: drop-shadow(0 0 12px rgba(0,255,102,0.8)); }
+                #sec-11 .s11-t1.active-step ~ .visual-pane .lbl-opt { opacity: 1; }
+
+                /* Pareto Frontier Curve */
+                #sec-11 .s11-pareto-line { 
+                    fill: none; stroke: var(--neon-yellow); stroke-width: 3; stroke-dasharray: 10, 10; 
+                    opacity: 0; stroke-dashoffset: 400; 
+                    transition: stroke-dashoffset 1.5s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.5s ease;
+                }
+                #sec-11 .s11-t1.active-step ~ .visual-pane .s11-pareto-line { opacity: 1; stroke-dashoffset: 0; animation: s11Flow 1s linear infinite forwards; }
+                @keyframes s11Flow { to { stroke-dashoffset: -20; } }
+
+                /* Optimal Region Shading */
+                #sec-11 .s11-optimal-zone { fill: url(#opt-gradient); opacity: 0; transition: opacity 1s ease 0.5s; }
+                #sec-11 .s11-t1.active-step ~ .visual-pane .s11-optimal-zone { opacity: 1; }
+
+            </style>
+            
+            <!-- Hidden state triggers -->
+            <div class="step-element s11-t1" data-step="1" style="display:none;"></div>
+
+            <!-- Left Pane: Visuals -->
+            <div class="visual-pane">
+                <svg viewBox="0 0 800 800" style="width: 100%; height: 100%; max-height: 85vh;">
+                    
+                    <defs>
+                        <!-- Glow gradient for optimal zone -->
+                        <linearGradient id="opt-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="rgba(0, 255, 102, 0.15)" />
+                            <stop offset="100%" stop-color="rgba(0, 255, 102, 0)" />
+                        </linearGradient>
+                    </defs>
+
+                    <!-- Title -->
+                    <text x="400" y="60" class="s11-title" text-anchor="middle">Performance vs. Runtime</text>
+
+                    <!-- ============================================== -->
+                    <!-- GRAPH GRID & AXES                              -->
+                    <!-- ============================================== -->
+
+                    <!-- Y Axis Grid (Validation Loss: 1.4 to 2.2) -->
+                    <!-- 2.2 -->
+                    <line x1="120" y1="100" x2="720" y2="100" class="s11-grid" />
+                    <text x="105" y="105" class="s11-axis-lbl" text-anchor="end">2.2</text>
+                    <!-- 2.0 -->
+                    <line x1="120" y1="225" x2="720" y2="225" class="s11-grid" />
+                    <text x="105" y="230" class="s11-axis-lbl" text-anchor="end">2.0</text>
+                    <!-- 1.8 -->
+                    <line x1="120" y1="350" x2="720" y2="350" class="s11-grid" />
+                    <text x="105" y="355" class="s11-axis-lbl" text-anchor="end">1.8</text>
+                    <!-- 1.6 -->
+                    <line x1="120" y1="475" x2="720" y2="475" class="s11-grid" />
+                    <text x="105" y="480" class="s11-axis-lbl" text-anchor="end">1.6</text>
+                    <!-- 1.4 (Base X Axis) -->
+                    <line x1="120" y1="600" x2="720" y2="600" class="s11-axis" />
+                    <text x="105" y="605" class="s11-axis-lbl" text-anchor="end" style="fill:var(--text-main);">1.4</text>
+
+                    <!-- X Axis Grid (Runtime: 0s to 1600s) -->
+                    <!-- 400s -->
+                    <line x1="270" y1="100" x2="270" y2="600" class="s11-grid" />
+                    <text x="270" y="625" class="s11-axis-lbl" text-anchor="middle">400s</text>
+                    <!-- 800s -->
+                    <line x1="420" y1="100" x2="420" y2="600" class="s11-grid" />
+                    <text x="420" y="625" class="s11-axis-lbl" text-anchor="middle">800s</text>
+                    <!-- 1200s -->
+                    <line x1="570" y1="100" x2="570" y2="600" class="s11-grid" />
+                    <text x="570" y="625" class="s11-axis-lbl" text-anchor="middle">1200s</text>
+                    <!-- 1600s -->
+                    <line x1="720" y1="100" x2="720" y2="600" class="s11-grid" />
+                    <text x="720" y="625" class="s11-axis-lbl" text-anchor="middle">1600s</text>
+                    <!-- 0s (Base Y Axis) -->
+                    <line x1="120" y1="100" x2="120" y2="600" class="s11-axis" />
+                    <text x="120" y="625" class="s11-axis-lbl" text-anchor="middle">0s</text>
+
+                    <!-- Axis Titles -->
+                    <text x="420" y="660" class="s11-label-x">Training Time (Seconds) (lower is better)→</text>
+                    <text x="50" y="400" class="s11-label-y">Validation Loss (lower is better)↓</text>
+
+
+                    <!-- ============================================== -->
+                    <!-- SCATTER PLOT DATA POINTS                       -->
+                    <!-- Math logic pre-calculated from prompt data     -->
+                    <!-- ============================================== -->
+
+                    <g>
+                        <!-- Optimal Zone Shading (Lower Left) -->
+                        <!-- Path encapsulates the bottom left corner up to the pareto curve -->
+                        <path class="s11-optimal-zone" d="M 120 600 L 400 600 L 400 556 Q 300 556 243 543 L 120 543 Z" />
+
+                        <!-- Background Ablation Runs (Faint) -->
+                        <circle cx="387" cy="387" r="5" class="s11-dot" /> <!-- RoPE (765s, 1.74) -->
+                        <circle cx="343" cy="343" r="5" class="s11-dot" /> <!-- ALiBi (1377s, 1.81) mapped roughly to 636px -->
+                        <circle cx="636" cy="343" r="5" class="s11-dot" /> <!-- ALiBi Real (1377s, 1.81) -->
+                        <circle cx="479" cy="418" r="5" class="s11-dot" /> <!-- RMSNorm (957s, 1.69) -->
+                        <circle cx="396" cy="493" r="5" class="s11-dot" /> <!-- Post LN (738s, 1.57) -->
+                        <circle cx="414" cy="524" r="5" class="s11-dot" /> <!-- 1 Head (784s, 1.52) -->
+                        <circle cx="406" cy="410" r="5" class="s11-dot" /> <!-- 8 Heads (762s, 1.70) -->
+                        <circle cx="402" cy="405" r="5" class="s11-dot" /> <!-- 12 Heads (752s, 1.71) -->
+                        <circle cx="388" cy="472" r="5" class="s11-dot" /> <!-- ReLU (716s, 1.60) -->
+                        <circle cx="417" cy="295" r="5" class="s11-dot" /> <!-- SwiGLU (792s, 1.88) -->
+                        <circle cx="391" cy="425" r="5" class="s11-dot" /> <!-- Scaled Res (723s, 1.68) -->
+                        <circle cx="403" cy="493" r="5" class="s11-dot" /> <!-- No PE (755s, 1.57) -->
+                        <!-- No Res (3.35) is off the chart at top, not plotted to keep scale zoomed in -->
+
+                        <!-- Context 512 (Outlier Top Right) -->
+                        <circle cx="699" cy="218" r="6" class="s11-dot" />
+                        <text x="699" y="200" fill="var(--text-muted)" font-family="monospace" font-size="12" text-anchor="middle">Ctx-512</text>
+
+                        <!-- Pareto Frontier Line -->
+                        <!-- Connects Ctx-128 (243, 543) to Ternary (415, 556) -->
+                        <!-- Path lengths set to 400 for CSS animation dashoffset -->
+                        <path class="s11-pareto-line" d="M 243 543 Q 320 560 415 556" />
+
+                        <!-- Baseline Point (Blue) -->
+                        <circle cx="394" cy="418" r="8" class="dot-base" />
+                        <text x="394" y="395" fill="var(--neon-blue)" font-family="monospace" font-size="14" font-weight="bold" text-anchor="middle">Baseline</text>
+                        <text x="394" y="440" fill="var(--text-muted)" font-family="monospace" font-size="11" text-anchor="middle">(731s, 1.69)</text>
+
+                        <!-- Ctx-128 Point (Optimal) -->
+                        <circle cx="243" cy="543" r="6" class="dot-opt" />
+                        <text x="243" y="520" class="lbl-opt" text-anchor="middle">Context-128</text>
+                        <text x="243" y="570" class="lbl-opt" style="font-size: 11px; font-weight: normal; opacity: 0.7;" text-anchor="middle">(330s, 1.49)</text>
+
+                        <!-- Ternary Point (Optimal) -->
+                        <circle cx="415" cy="556" r="6" class="dot-opt" />
+                        <text x="415" y="580" class="lbl-opt" text-anchor="middle">Ternary Constraints</text>
+                        <text x="415" y="595" class="lbl-opt" style="font-size: 11px; font-weight: normal; opacity: 0.7;" text-anchor="middle">(788s, 1.47)</text>
+
+                    </g>
+
+                </svg>
+            </div>
+
+        <!-- Right Pane: Slide Text -->
+            <div class="slide-pane">
+                <h2>Section 11</h2>
+                <h1>Efficiency Trade-off</h1>
+                
+                <!-- Step 0: Trade-off Mapping & Baseline Placement -->
+                <div class="step-element" data-step="0">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--text-muted); margin-right: 10px;">•</span>
+                            <span>Plotting validation loss against runtime maps our design tradeoffs clearly.</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-blue); margin-right: 10px;">•</span>
+                            <span>The standard <strong style="color: var(--neon-blue);">Baseline</strong> rests in the center of a dense clusters of runs.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 1: Pareto Frontier & Final Realization -->
+                <div class="step-element" data-step="1" style="margin-top: 1.5rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span>The optimal <strong style="color: var(--neon-green);">Pareto Frontier</strong> is defined by just two models.</span>
+                        </li>
+                        <li style="margin-bottom: 0.8rem; display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span><strong>Ternary Weight</strong> and <strong>Context-128</strong> setups yield optimal efficiency.</span>
+                        </li>
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span><strong>Insight:</strong> Simpler, constrained networks can be both <strong>faster and more accurate</strong>.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- SECTION 12: CONCLUSION                                  -->
+        <!-- ======================================================= -->
+        <section class="section-block" data-max-steps="4" id="sec-12">
+            <style>
+                /* --- Scoped Animations & Styles for Section 12 --- */
+
+                /* Abstract Geometric Visuals */
+                @keyframes s12Spin { 100% { transform: rotate(360deg); } }
+                @keyframes s12SpinRev { 100% { transform: rotate(-360deg); } }
+                
+                #sec-12 .s12-visual-group { transform-origin: 400px 400px; transition: all 1.2s cubic-bezier(0.25, 1, 0.5, 1); }
+                
+                /* Outer Complex Rings (Representing Bloat) */
+                #sec-12 .c-complex { transition: opacity 1s ease, transform 1s ease; }
+                #sec-12 .c-complex-ring1 { animation: s12Spin 20s linear infinite; transform-origin: 400px 400px; }
+                #sec-12 .c-complex-ring2 { animation: s12SpinRev 25s linear infinite; transform-origin: 400px 400px; }
+                
+                /* Step 1: Hide Outer Complexity */
+                #sec-12 .s12-t1.active-step ~ .visual-pane .c-complex { opacity: 0; transform: scale(1.2); }
+
+                /* Stable Core (Representing Essential Residuals) */
+                #sec-12 .c-stable { transition: all 1s ease; opacity: 0.8; }
+                #sec-12 .c-stable-dash { animation: s12Spin 30s linear infinite; transform-origin: 400px 400px; }
+
+                /* Inner Constraint (Representing Ternary Quantization) */
+                #sec-12 .c-constraint { opacity: 0; transform: scale(0.5); transition: all 1s cubic-bezier(0.25, 1, 0.5, 1); }
+                
+                /* Step 3: Show Constraint */
+                #sec-12 .s12-t3.active-step ~ .visual-pane .c-constraint { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 20px rgba(0, 255, 102, 0.6)); }
+
+                /* Step 4: Collapse to the Spark (Less is More) */
+                #sec-12 .s12-t4.active-step ~ .visual-pane .c-stable { opacity: 0; transform: scale(0); }
+                #sec-12 .s12-t4.active-step ~ .visual-pane .c-constraint { opacity: 0; transform: scale(0); }
+                
+                #sec-12 .c-spark { r: 0; fill: var(--text-main); transition: r 1s cubic-bezier(0.25, 1, 0.5, 1) 0.5s, filter 1s ease; }
+                #sec-12 .s12-t4.active-step ~ .visual-pane .c-spark { r: 12px; filter: drop-shadow(0 0 40px var(--text-main)) drop-shadow(0 0 80px var(--neon-cyan)); }
+
+                /* Conclusion Cards Container */
+                #sec-12 .s12-conclusions {
+                    position: absolute; width: 85%; top: 20%; left: 7.5%;
+                    display: flex; flex-direction: column; gap: 20px;
+                    z-index: 2; pointer-events: none;
+                }
+
+                /* Individual Cards */
+                #sec-12 .s12-card {
+                    background: rgba(13, 17, 23, 0.85); border: 1px solid var(--stroke);
+                    border-radius: 12px; padding: 20px 25px; display: flex; align-items: center; justify-content: space-between; gap: 20px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+                    opacity: 0; transform: translateX(-40px); transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+                }
+                
+                /* Card Internals */
+                #sec-12 .s12-icon { font-family: monospace; font-size: 24px; font-weight: bold; width: 45px; height: 45px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(255,255,255,0.05); }
+                #sec-12 .s12-text { font-size: 1.05rem; color: var(--text-main); line-height: 1.5; font-family: -apple-system, sans-serif; flex-grow: 1; padding-right: 15px; }
+                #sec-12 .s12-mini-diagram { width: 60px; height: 60px; flex-shrink: 0; background: rgba(255,255,255,0.03); border: 1px solid var(--stroke); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+
+                /* Step Triggers for Cards (Now properly split) */
+                #sec-12 .s12-t1.active-step ~ .visual-pane .c-1 { opacity: 1; transform: translateX(0); }
+                #sec-12 .s12-t2.active-step ~ .visual-pane .c-2 { opacity: 1; transform: translateX(0); }
+                #sec-12 .s12-t3.active-step ~ .visual-pane .c-3 { opacity: 1; transform: translateX(0); }
+
+                /* Step 4: Fade out all cards */
+                #sec-12 .s12-t4.active-step ~ .visual-pane .s12-card { opacity: 0; transform: scale(0.9); filter: blur(10px); transition-delay: 0s !important; }
+
+                /* The "Less is More" finale */
+                #sec-12 .s12-mantra {
+                    position: absolute; width: 100%; top: 55%; left: 0;
+                    text-align: center; font-family: monospace; font-size: 3.5rem; font-weight: bold;
+                    color: var(--text-main); text-transform: uppercase; letter-spacing: 15px;
+                    text-shadow: 0 0 30px rgba(255,255,255,0.6);
+                    opacity: 0; transform: translateY(20px) scale(0.9); transition: all 1.2s cubic-bezier(0.25, 1, 0.5, 1) 0.6s;
+                    z-index: 3; pointer-events: none;
+                }
+                #sec-12 .s12-t4.active-step ~ .visual-pane .s12-mantra { opacity: 1; transform: translateY(0) scale(1); }
+
+            </style>
+            
+            <!-- Hidden state triggers -->
+            <div class="step-element s12-t1" data-step="1" style="display:none;"></div>
+            <div class="step-element s12-t2" data-step="2" style="display:none;"></div>
+            <div class="step-element s12-t3" data-step="3" style="display:none;"></div>
+            <div class="step-element s12-t4" data-step="4" style="display:none;"></div>
+
+            <!-- Left Pane: Visuals -->
+            <div class="visual-pane">
+                
+                <!-- Background Abstract Geometry -->
+                <svg viewBox="0 0 800 800" style="position: absolute; width: 100%; height: 100%; z-index: 1;">
+                    
+                    <!-- Outer Complexity -->
+                    <g class="s12-visual-group c-complex">
+                        <circle cx="400" cy="400" r="280" fill="none" stroke="var(--neon-purple)" stroke-width="1.5" stroke-dasharray="8 20" opacity="0.4" class="c-complex-ring1" />
+                        <circle cx="400" cy="400" r="250" fill="none" stroke="var(--stroke)" stroke-width="2" stroke-dasharray="50 30 10 30" class="c-complex-ring2" />
+                        <path d="M 120 400 L 680 400 M 400 120 L 400 680" stroke="var(--stroke)" stroke-width="1" opacity="0.3" />
+                    </g>
+
+                    <!-- Stable Essential Core -->
+                    <g class="s12-visual-group c-stable">
+                        <circle cx="400" cy="400" r="160" fill="rgba(0, 243, 255, 0.03)" stroke="var(--neon-blue)" stroke-width="3" />
+                        <circle cx="400" cy="400" r="180" fill="none" stroke="var(--neon-blue)" stroke-width="1.5" stroke-dasharray="10 15" class="c-stable-dash" opacity="0.6"/>
+                    </g>
+
+                    <!-- Constraint (Ternary Triangle) -->
+                    <g class="s12-visual-group c-constraint">
+                        <polygon points="400,280 504,460 296,460" fill="rgba(0, 255, 102, 0.15)" stroke="var(--neon-green)" stroke-width="4" stroke-linejoin="round" />
+                    </g>
+
+                    <!-- The Final Spark -->
+                    <circle cx="400" cy="400" class="c-spark" />
+
+                </svg>
+
+                <!-- Foreground HTML Cards -->
+                <div class="s12-conclusions">
+                    
+                    <!-- Card 1 -->
+                    <div class="s12-card c-1" style="border-left-color: var(--neon-blue);">
+                        <div class="s12-icon" style="color: var(--neon-blue);">1</div>
+                        <div class="s12-text"><strong style="color: var(--neon-blue);">Basic Flow is Essential:</strong> Core topological features like residual connections remain absolutely required for stability.</div>
+                        <div class="s12-mini-diagram">
+                            <!-- Mini Residual Diagram -->
+                            <svg viewBox="0 0 40 40" width="40" height="40">
+                                <rect x="10" y="15" width="20" height="15" fill="rgba(0,243,255,0.1)" stroke="var(--neon-blue)" stroke-width="1.5" rx="2"/>
+                                <path d="M 20 35 L 20 30 M 20 15 L 20 10" stroke="var(--neon-blue)" stroke-width="1.5"/>
+                                <path d="M 20 35 C 0 35, 0 5, 20 5" fill="none" stroke="var(--neon-blue)" stroke-width="1.5" stroke-dasharray="2,2"/>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Card 2 -->
+                    <div class="s12-card c-2" style="border-left-color: var(--neon-red);">
+                        <div class="s12-icon" style="color: var(--neon-red);">2</div>
+                        <div class="s12-text"><strong style="color: var(--neon-red);">Scale Mismatch:</strong> Adding capacity or expanding context explicitly harms generalization in small-data regimes.</div>
+                        <div class="s12-mini-diagram">
+                            <!-- Mini Overflow/SwiGLU Diagram -->
+                            <svg viewBox="0 0 40 40" width="40" height="40">
+                                <rect x="5" y="15" width="30" height="10" fill="none" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="2,2"/>
+                                <rect x="2" y="12" width="36" height="16" fill="rgba(255,51,102,0.1)" stroke="var(--neon-red)" stroke-width="1.5" rx="2"/>
+                                <path d="M 10 30 C 15 30, 25 10, 30 10" fill="none" stroke="var(--neon-red)" stroke-width="1.5"/>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Card 3 -->
+                    <div class="s12-card c-3" style="border-left-color: var(--neon-green);">
+                        <div class="s12-icon" style="color: var(--neon-green);">3</div>
+                        <div class="s12-text"><strong style="color: var(--neon-green);">Constraints Generalize:</strong> Severe architectural restrictions, like Ternary Quantization, offer the ultimate implicit regularization.</div>
+                        <div class="s12-mini-diagram">
+                            <!-- Mini Ternary Diagram -->
+                            <svg viewBox="0 0 40 40" width="40" height="40">
+                                <rect x="5" y="14" width="9" height="12" fill="rgba(0,255,102,0.1)" stroke="var(--neon-green)" stroke-width="1" rx="1"/>
+                                <rect x="15.5" y="14" width="9" height="12" fill="none" stroke="var(--text-muted)" stroke-width="1" rx="1"/>
+                                <rect x="26" y="14" width="9" height="12" fill="rgba(0,255,102,0.1)" stroke="var(--neon-green)" stroke-width="1" rx="1"/>
+                                <text x="9.5" y="23" fill="var(--neon-green)" font-family="monospace" font-size="8" text-anchor="middle">-</text>
+                                <text x="20" y="23" fill="var(--text-muted)" font-family="monospace" font-size="8" text-anchor="middle">0</text>
+                                <text x="30.5" y="23" fill="var(--neon-green)" font-family="monospace" font-size="8" text-anchor="middle">+</text>
+                            </svg>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- The Finale Text -->
+                <div class="s12-mantra">LESS IS MORE</div>
+
+            </div>
+
+        <!-- Right Pane: Slide Text -->
+            <div class="slide-pane">
+                <h2>Section 12</h2>
+                <h1>Conclusion</h1>
+                
+                <!-- Step 0: Context shift -->
+                <div class="step-element" data-step="0">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--text-muted); margin-right: 10px;">•</span>
+                            <span>Standard transformer design guidelines break down under strict data limits.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 1: Core Essentials -->
+                <div class="step-element" data-step="1" style="margin-top: 1rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-blue); margin-right: 10px;">•</span>
+                            <span>Core architectural dependencies like <strong style="color: var(--neon-blue);">Residual Connections</strong> remain completely mandatory.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 2: The Complexity Trap -->
+                <div class="step-element" data-step="2" style="margin-top: 1rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-red); margin-right: 10px;">•</span>
+                            <span>Expanding context windows or increasing activation complexity actively worsens <strong style="color: var(--neon-red);">overfitting</strong>.</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Step 3: Constraint Benefit -->
+                <div class="step-element" data-step="3" style="margin-top: 1rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">•</span>
+                            <span>Strict constraints like <strong style="color: var(--neon-green);">Ternary Quantization</strong> act as effective regularization.</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Step 4: The Thesis Statement -->
+                <div class="step-element" data-step="4" style="margin-top: 1.2rem;">
+                    <ul style="list-style: none; padding-left: 0; line-height: 1.6; font-size: 1.1rem;">
+                        <li style="display: flex; align-items: flex-start;">
+                            <span style="color: var(--neon-green); margin-right: 10px;">⚡</span>
+                            <span><strong>Summary:</strong> Restricting capacity yields optimal generalization at small scales: <strong>less can often be more</strong>.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- END SLIDE                                               -->
+        <!-- ======================================================= -->
+        <section class="section-block" data-max-steps="0" id="sec-end">
+            <style>
+                /* --- Scoped Animations for End Slide --- */
+                #sec-end .end-core { fill: var(--neon-green); filter: drop-shadow(0 0 20px var(--neon-green)); }
+                
+                #sec-end .end-ripple { fill: none; stroke: var(--neon-green); stroke-width: 2; opacity: 0; animation: endRippleAnim 4s linear infinite; }
+                #sec-end .end-ripple.r2 { animation-delay: 1.3s; }
+                #sec-end .end-ripple.r3 { animation-delay: 2.6s; }
+
+                @keyframes endRippleAnim {
+                    0% { r: 20px; opacity: 0.8; stroke-width: 4; }
+                    100% { r: 300px; opacity: 0; stroke-width: 0.5; }
+                }
+            </style>
+            
+            <div class="visual-pane">
+                <svg viewBox="0 0 800 800" style="width: 100%; height: 100%;">
+                    <circle cx="400" cy="400" class="end-ripple r1" />
+                    <circle cx="400" cy="400" class="end-ripple r2" />
+                    <circle cx="400" cy="400" class="end-ripple r3" />
+                    <circle cx="400" cy="400" r="15" class="end-core" />
+                </svg>
+            </div>
+
+            <div class="slide-pane">
+                <h2 style="color: var(--neon-green);">Team 22</h2>
+                <h1 style="font-size: 4rem; margin-bottom: 0.5rem; color: var(--text-main);">Thank You</h1>
+            </div>
+        </section>
+
+    <!-- =========================================
+         JAVASCRIPT ENGINE (Do Not Edit)
+         ========================================= -->
+    <script>
+        let currentSection = 0;
+        let currentStep = 0;
+        const sections = document.querySelectorAll('.section-block');
+        const progressBar = document.getElementById('progress-bar');
+
+        function updateView() {
+            // 1. Activate correct section block
+            sections.forEach((sec, index) => {
+                if (index === currentSection) {
+                    sec.classList.add('active');
+                } else {
+                    sec.classList.remove('active');
+                }
+            });
+
+            // 2. Handle sub-steps strictly within the active block
+            const activeBlock = sections[currentSection];
+            const stepElements = activeBlock.querySelectorAll('.step-element');
+            
+            stepElements.forEach(el => {
+                const targetStep = parseInt(el.getAttribute('data-step') || "0");
+                if (currentStep >= targetStep) {
+                    el.classList.add('active-step');
+                } else {
+                    el.classList.remove('active-step');
+                }
+            });
+
+            // 3. Update Progress Bar
+            progressBar.style.width = ((currentSection / (sections.length - 1)) * 100) + "%";
+        }
+
+        // Navigation Controllers
+        function nextAction() {
+            const activeBlock = sections[currentSection];
+            const maxSteps = parseInt(activeBlock.getAttribute('data-max-steps') || "0");
+            
+            if (currentStep < maxSteps) {
+                currentStep++;
+                updateView();
+            } else if (currentSection < sections.length - 1) {
+                currentSection++;
+                currentStep = 0;
+                updateView();
+            }
+        }
+
+        function prevAction() {
+            if (currentStep > 0) {
+                currentStep--;
+                updateView();
+            } else if (currentSection > 0) {
+                currentSection--;
+                const prevBlock = sections[currentSection];
+                currentStep = parseInt(prevBlock.getAttribute('data-max-steps') || "0");
+                updateView();
+            }
+        }
+
+        // Key Bindings
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') nextAction();
+            else if (e.key === 'ArrowLeft' || e.key === 'PageUp') prevAction();
+        });
+
+        // Init
+        updateView();
+    </script>
+</body>
+</html>
