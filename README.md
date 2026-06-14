@@ -76,4 +76,6 @@ This notebook will calculate the final Validation Loss, Perplexity, and generate
 
 ## Acknowledgments
 
-The baseline architecture for this project is built upon nanoGPT by Andrej Karpathy. The ternary quantization implementation draws inspiration from the methodology presented in *The Era of 1-bit LLMs: All Large Language Models are in 1.58 Bits* by Ma et al., 2024.
+The baseline architecture for this project is built upon nanoGPT by Andrej Karpathy. 
+https://github.com/karpathy/nanoGPT
+The ternary quantization implementation draws inspiration from the methodology presented in *The Era of 1-bit LLMs: All Large Language Models are in 1.58 Bits* by Ma et al., 2024.
